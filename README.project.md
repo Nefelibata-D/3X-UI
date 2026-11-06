@@ -25,3 +25,5 @@
 本轮（2026-11-06）定向检查：前端 typecheck、lint、导航契约及 Go 全包编译通过。翻译键集合一致性通过；dead-key 检查仍报告既有界面定制留下的 `pages.clients.speed`、`pages.clients.remaining` 和 `pages.nodes.deleteConfirmContent`，未通过扩展豁免或删除上游翻译来隐藏。未重跑真实跨容器连接验证。
 
 发布配置：本仓库仅构建 Linux amd64，面向 Ubuntu / Debian；版本标签发布正式 Release，main 发布 dev-latest。Docker 发布及上游专用自动化通过仓库身份判断跳过，常规 CI 保留。安装与发布说明以本目录 README.md 为准。
+
+本项目不启用 Dependabot 自动依赖升级；已移除 .github/dependabot.yml，依赖更新按实际需求手动进行。

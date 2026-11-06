@@ -5,7 +5,8 @@ go 1.27.3
 require (
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e
-	github.com/gin-contrib/gzip v1.2.8
+	github.com/dlclark/regexp2 v1.12.0
+	github.com/gin-contrib/gzip v1.2.9
 	github.com/gin-contrib/sessions v1.1.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.15
@@ -53,7 +54,6 @@ require (
 	github.com/bytedance/sonic v1.15.4 // indirect
 	github.com/bytedance/sonic/loader v0.5.3 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
-	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.16 // indirect

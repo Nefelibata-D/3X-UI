@@ -25,17 +25,11 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/Nefelibata-D/3X-UI/main/install.sh)
 ```
 
-开发版（跟随 `main` 的 `dev-latest` 预发布）：
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Nefelibata-D/3X-UI/main/install.sh) dev-latest
-```
-
 安装指定版本时，在命令末尾传入 [Releases](https://github.com/Nefelibata-D/3X-UI/releases) 中实际存在的版本标签。安装完成后按终端输出访问面板，通过 `x-ui` 打开命令行管理菜单。
 
 ## 更新
 
-面板更新与 `x-ui` 菜单均使用本项目更新源：稳定通道读取最新正式 Release，开发通道读取 `dev-latest`。更新包提供对应 `.sha256` 校验文件。Xray 等独立组件保留各自的上游更新源。
+面板更新与 `x-ui` 菜单均使用本项目更新源：稳定通道读取最新正式 Release；本仓库只发布版本标签对应的正式版本。更新包提供对应 `.sha256` 校验文件。Xray 等独立组件保留各自的上游更新源。
 
 子节点远程更新调用子节点自身更新器；子节点也需要先安装包含本项目更新源的版本。
 
@@ -44,9 +38,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Nefelibata-D/3X-UI/main/inst
 [GitHub Actions](https://github.com/Nefelibata-D/3X-UI/actions) 按仓库身份控制运行：
 
 - 本仓库保留常规 CI：Go 与前端检查、测试和构建。
-- `main` 中发布相关文件变更后，构建并更新 `dev-latest` 开发版。
-- 推送 `v*.*.*` 标签后，构建并发布正式 Release；发布前同步 `internal/config/version` 与版本标签。
-- 手动运行发布工作流仅构建并保存 Actions artifact，不自动发布 Release。
+- 推送 `v*` 版本标签后自动构建并发布正式 Release，标题就是标签名，例如 `v3.11.0.1`。
+- 标签必须与 `internal/config/version` 一致，否则构建失败。
+- 手动重跑时选择对应版本标签，也会自动上传 Release；普通分支不执行发布。
 - 发布产物只有 `x-ui-linux-amd64.tar.gz` 和 `x-ui-linux-amd64.tar.gz.sha256`。
 - Docker 发布、文档 CI/Pages、Claude PR/Issue、定时变异测试、单独 CodeQL 和缓存清理仅允许在官方上游仓库运行，在本仓库跳过。事件仍可能生成已跳过的工作流记录。
 

@@ -5,6 +5,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   InfoCircleOutlined,
+  LinkOutlined,
   QrcodeOutlined,
   RetweetOutlined,
 } from '@ant-design/icons';
@@ -21,6 +22,7 @@ interface ClientRowActionsProps {
   onResetTraffic: (email: string) => void;
   onEdit: (email: string) => void;
   onDelete: (email: string) => void;
+  onSubscription?: (email: string) => void;
 }
 
 // Five Tooltip-wrapped buttons per row, none of which depend on traffic. Left
@@ -35,10 +37,12 @@ export const ClientRowActions = memo(function ClientRowActions({
   onResetTraffic,
   onEdit,
   onDelete,
+  onSubscription,
 }: ClientRowActionsProps) {
   const { t } = useTranslation();
   return (
     <Space size={4}>
+      {onSubscription && <Tooltip title="Clash 订阅"><Button size="small" type="text" style={ICON_BUTTON_STYLE} icon={<LinkOutlined aria-hidden />} aria-label="Clash 订阅" onClick={() => onSubscription(email)} /></Tooltip>}
       <Tooltip title={t('pages.clients.qrCode')}>
         <Button
           size="small"

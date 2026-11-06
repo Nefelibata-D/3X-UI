@@ -8,10 +8,8 @@ import {
   ApartmentOutlined,
   CloseOutlined,
   CloudServerOutlined,
-  ClusterOutlined,
   CodeOutlined,
   DatabaseOutlined,
-  DiscordOutlined,
   GithubOutlined,
   HeartOutlined,
   LogoutOutlined,
@@ -26,7 +24,6 @@ import {
   SearchOutlined,
   SettingOutlined,
   SunOutlined,
-  TelegramFilled,
 } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -190,14 +187,16 @@ export default function AppSidebar() {
 
   const tabs = useMemo<{ key: string; icon: ComponentType; title: string }[]>(
     () => [
-      ...PANEL_ROUTES.map((route) => ({
+      ...PANEL_ROUTES.filter(
+        (route) => route.path !== '/clash-subscriptions' || allSetting.subClashEnable,
+      ).map((route) => ({
         key: route.path,
         icon: route.icon,
-        title: t(route.titleKey),
+        title: route.title ?? t(route.titleKey),
       })),
       { key: LOGOUT_KEY, icon: LogoutOutlined, title: t('logout') },
     ],
-    [t],
+    [t, allSetting.subClashEnable],
   );
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.key !== LOGOUT_KEY), [tabs]);
@@ -216,19 +215,9 @@ export default function AppSidebar() {
         label: t('pages.settings.securitySettings'),
       },
       {
-        key: '/settings#telegram',
-        icon: <TelegramFilled aria-hidden />,
-        label: t('pages.settings.TGBotSettings'),
-      },
-      {
         key: '/settings#email',
         icon: <MailOutlined aria-hidden />,
         label: t('pages.settings.emailSettings'),
-      },
-      {
-        key: '/settings#discord',
-        icon: <DiscordOutlined aria-hidden />,
-        label: t('pages.settings.discordSettings'),
       },
       {
         key: '/settings#subscription',
@@ -260,11 +249,6 @@ export default function AppSidebar() {
         icon: <SettingOutlined aria-hidden />,
         label: t('pages.xray.basicTemplate'),
       },
-      {
-        key: '/xray#balancer',
-        icon: <ClusterOutlined aria-hidden />,
-        label: t('pages.xray.Balancers'),
-      },
       { key: '/xray#dns', icon: <DatabaseOutlined aria-hidden />, label: 'DNS' },
       {
         key: '/xray#advanced',
@@ -278,13 +262,10 @@ export default function AppSidebar() {
   const settingsActive = pathname === '/settings';
   const xrayActive = pathname === '/xray';
   const selectedKey = settingsActive
-    ? `/settings${hash || '#general'}`
+    ? '/settings' + (hash || '#general')
     : xrayActive
-      ? `/xray${hash || '#basic'}`
-      : pathname === ''
-        ? '/'
-        : pathname;
-
+      ? '/xray' + (hash || '#basic')
+      : pathname || '/';
   const openSubmenu = settingsActive ? '/settings' : xrayActive ? '/xray' : null;
   const [openKeys, setOpenKeys] = useState<string[]>(() => (openSubmenu ? [openSubmenu] : []));
   if (openSubmenu && !openKeys.includes(openSubmenu)) {

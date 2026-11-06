@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -705,6 +706,9 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		return false, err
 	}
 	if err := validateClientTrafficReset(updated.TrafficReset, updated.TrafficResetDay); err != nil {
+		return false, err
+	}
+	if err := clash.ValidateClientTotalLimit(id, updated.TotalGB); err != nil {
 		return false, err
 	}
 	existingClientsByInbound := make(map[int][]model.Client, len(attachedIds))

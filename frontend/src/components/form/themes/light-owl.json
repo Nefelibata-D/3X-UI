@@ -1,0 +1,57 @@
+{
+  "base": "vs",
+  "inherit": true,
+  "rules": [
+    {
+      "token": "type.yaml",
+      "foreground": "111111",
+      "fontStyle": ""
+    },
+    {
+      "token": "string.yaml",
+      "foreground": "4876d6",
+      "fontStyle": ""
+    },
+    {
+      "token": "number.yaml",
+      "foreground": "aa0982",
+      "fontStyle": ""
+    },
+    {
+      "token": "keyword.yaml",
+      "foreground": "bc5454",
+      "fontStyle": ""
+    },
+    {
+      "token": "comment.yaml",
+      "foreground": "989fb1",
+      "fontStyle": ""
+    }
+  ],
+  "colors": {
+    "editor.background": "#FBFBFB",
+    "editor.foreground": "#403f53",
+    "editorCursor.foreground": "#90A7B2",
+    "editorLineNumber.foreground": "#90A7B2",
+    "editorLineNumber.activeForeground": "#403f53",
+    "editor.selectionBackground": "#E0E0E0",
+    "editor.selectionHighlightBackground": "#339cec33",
+    "editor.wordHighlightBackground": "#339cec33",
+    "editor.wordHighlightStrongBackground": "#007dd659",
+    "editor.findMatchBackground": "#93A1A16c",
+    "editor.findMatchHighlightBackground": "#93a1a16c",
+    "editor.findRangeHighlightBackground": "#7497a633",
+    "editor.hoverHighlightBackground": "#339cec33",
+    "editor.lineHighlightBackground": "#F0F0F0",
+    "editor.rangeHighlightBackground": "#7497a633",
+    "editorWhitespace.foreground": "#d9d9d9",
+    "editorIndentGuide.background": "#d9d9d9",
+    "editorSuggestWidget.background": "#F0F0F0",
+    "editorSuggestWidget.foreground": "#403f53",
+    "editorSuggestWidget.highlightForeground": "#403f53",
+    "editorSuggestWidget.selectedBackground": "#d3e8f8",
+    "editorSuggestWidget.border": "#d9d9d9",
+    "editorHoverWidget.background": "#F0F0F0",
+    "editorHoverWidget.border": "#d9d9d9"
+  }
+}

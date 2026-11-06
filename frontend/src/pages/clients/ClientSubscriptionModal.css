@@ -1,0 +1,63 @@
+.subscription-source-toggle {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  padding-top: 16px;
+}
+.clash-template-controls:has(> .subscription-source-toggle) {
+  height: min(626px, calc(62vh + 16px));
+}
+.subscription-source-toggle .ant-segmented-item-label {
+  font-size: 14px;
+}
+.template-entry-row:has(> .subscription-entry-actions) .template-route-tags {
+  width: auto;
+  justify-content: flex-start;
+}
+.subscription-inherited-item:not(.template-route-card),
+.subscription-node-card {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.subscription-inherited-disabled,
+.subscription-inherited-overridden {
+  background: color-mix(
+    in srgb,
+    var(--ant-color-error) 4%,
+    var(--ant-color-bg-container)
+  );
+}
+.subscription-inherited-disabled .template-entry-title,
+.subscription-inherited-overridden .template-entry-title {
+  color: var(--ant-color-text-disabled);
+}
+.subscription-inherited-disabled .ant-tag,
+.subscription-inherited-overridden .ant-tag {
+  color: var(--ant-color-text-disabled);
+  background: transparent;
+  border-color: var(--ant-color-border-secondary);
+}
+.subscription-entry-actions {
+  flex-shrink: 0;
+}
+.subscription-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.subscription-address {
+  overflow-wrap: anywhere;
+  margin: 0 !important;
+}
+
+.subscription-time-tag {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.template-entry-form:has(.subscription-time-tag) .ant-form-item-label {
+  width: 7em;
+}

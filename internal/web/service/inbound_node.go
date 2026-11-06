@@ -549,7 +549,12 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 	// origin (an inbound the node forwards from its own sub-node) is kept as-is,
 	// so a chained Node1->Node2->Node3 still attributes Node3's inbounds to Node3.
 	var nodeRow model.Node
-	db.Select("guid", "config_dirty", "inbound_sync_mode", "inbound_tags").Where("id = ?", nodeID).First(&nodeRow)
+	if err := db.Select("guid", "config_dirty", "inbound_sync_mode", "inbound_tags").Where("id = ?", nodeID).First(&nodeRow).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
 	// Re-read inside the serialized writer: a client added while this snapshot
 	// was in flight marks the node dirty after the caller sampled the flag.
 	dirty = dirty || nodeRow.ConfigDirty

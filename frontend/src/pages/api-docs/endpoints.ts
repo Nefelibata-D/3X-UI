@@ -198,6 +198,20 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'passkeys',
+    title: 'Passkeys',
+    description: 'WebAuthn passkeys. Management requires an administrator browser session and CSRF; bearer tokens are rejected. One RP domain is shared by all administrators; changing it atomically deletes all credentials and pending ceremonies. Login requires user verification and creates the standard panel session.',
+    endpoints: [
+      { method: 'GET', path: '/panel/api/clash/passkeys', security: [{ cookieAuth: [] }], summary: 'Get the configured domain and this administrator’s passkeys.' },
+      { method: 'POST', path: '/panel/api/clash/passkeys/domain', security: [{ cookieAuth: [] }], summary: 'Set the single domain; a different domain permanently revokes every passkey.', params: [{ name: 'domain', in: 'body (json)', type: 'string' }] },
+      { method: 'POST', path: '/panel/api/clash/passkeys/delete', security: [{ cookieAuth: [] }], summary: 'Delete a passkey belonging to the current administrator.', params: [{ name: 'id', in: 'body (json)', type: 'string' }] },
+      { method: 'POST', path: '/panel/api/clash/passkeys/register/begin', security: [{ cookieAuth: [] }], summary: 'Start registration; returns requestId and WebAuthn options. Origin must match the configured domain.' },
+      { method: 'POST', path: '/panel/api/clash/passkeys/register/finish', security: [{ cookieAuth: [] }], summary: 'Verify and store the passkey. Challenges expire after five minutes and can be consumed once.', params: [{ name: 'name', in: 'body (json)', type: 'string' }, { name: 'requestId', in: 'body (json)', type: 'string' }, { name: 'credential', in: 'body (json)', type: 'object' }] },
+      { method: 'POST', path: '/passkey/login/begin', security: [{ cookieAuth: [] }], summary: 'Start discoverable passkey login. Requires anonymous session CSRF and a matching Origin. Returns requestId and WebAuthn options.' },
+      { method: 'POST', path: '/passkey/login/finish', security: [{ cookieAuth: [] }], summary: 'Verify a user-verified WebAuthn assertion and create the normal panel session.', params: [{ name: 'requestId', in: 'body (json)', type: 'string' }, { name: 'credential', in: 'body (json)', type: 'object' }] },
+    ],
+  },
+  {
     id: 'authentication',
     title: 'Authentication',
     description:
@@ -2711,6 +2725,81 @@ export const sections: readonly Section[] = [
           'Delete a balancer by id (POST alias of DELETE for clients that cannot send DELETE).',
         params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Balancer id.' }],
         responseSchema: 'SubBalancer',
+      },
+    ],
+  },
+
+  {
+    id: 'clash',
+    title: 'Load Balancing Gateway',
+    description:
+      'Project node weights, per-client per-node quotas and ratio overrides and the child-side gateway policy API. The child apply/report routes are authenticated with the master node-sync token; the remaining routes use the admin session or an admin API token.',
+    endpoints: [
+      { method: 'GET', path: '/panel/api/clash/clients/:id/subscription', summary: 'Get template binding, disabled inherited entries, YAML overrides and authorized node injection mappings for the official subscription identity.' },
+      { method: 'POST', path: '/panel/api/clash/clients/:id/subscription', summary: 'Save subscription binding. templateId=0 removes binding. Rule identity is type plus predicate; providers and groups replace by name. Shared SubID clients share this binding.' },
+      {
+        method: 'DELETE',
+        path: '/panel/api/clash/templates/:id',
+        summary: 'Delete a YAML subscription template by ID. Requires admin authentication and Clash subscriptions enabled.',
+      },
+      { method: 'GET', path: '/panel/api/clash/clients/:id/subscription/proxies', summary: 'List authorized proxies with their official generated Clash configurations and node keys for administrator subscription preview.' },
+      { method: 'POST', path: '/panel/api/clash/clients/:id/subscription/validate', summary: 'Validate a subscription draft after real node injection, including blacklist completeness and dialer cycles. Does not save.' },
+      {
+        method: 'GET',
+        path: '/panel/api/clash/overview',
+        summary:
+          'Return node weights, computed default ratios, and the last applied/observed policy state for this panel and its nodes.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/weights',
+        summary:
+          'Save node capacityBytes (0 means unlimited), resetSchedule (day 1..31, minute 0..1439 in panel timezone), and default weights. Finite capacity must cover all explicit client allocations.',
+        body: '{\n  "items": [\n    { "nodeKey": "local", "defaultWeight": 3, "capacityBytes": 107374182400, "resetSchedule": { "day": 15, "minute": 120, "disabled": false } },\n    { "nodeKey": "node:1", "defaultWeight": 1 }\n  ]\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/sync',
+        summary: 'Run one master-to-child policy reconciliation and return its status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clash/clients/:id',
+        summary:
+          'Return a client ratio override plus its authorized outlets, inherited default ratios and normalized preview. The id is the stable official client record id.',
+        params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Official client record id.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/clients/:id/ratio',
+        summary:
+          'Save per-node byte allocations and inherit/custom weights. resetMode is node (follow each node schedule) or manual. Limit 0 is only allowed on unlimited nodes.',
+        params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Official client record id.' }],
+        body: '{\n  "mode": "custom",\n  "resetMode": "node",\n  "weights": { "local": 1, "node:1": 3 },\n  "limits": { "local": 0, "node:1": 107374182400 }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/policies/reset',
+        summary:
+          'Request a usage/grace reset for one node/client policy. The child applies it locally and re-enables only inbounds the gateway disabled.',
+        body: '{\n  "nodeKey": "node:1",\n  "clientId": 1\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/policy/apply',
+        summary:
+          'Child endpoint: apply one node/client quota policy. Bound to the child panel GUID and authenticated by the master node-sync token.',
+        body: '{\n  "masterGuid": "...",\n  "targetGuid": "...",\n  "clientId": 1,\n  "clientEmail": "user1",\n  "revision": 1,\n  "budgetBytes": 107374182400,\n  "graceSeconds": 600,\n  "gracePercent": 10,\n  "effectiveRatio": 1,\n  "periodTimezone": "Asia/Shanghai"\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/clash/policy/report',
+        summary:
+          'Child endpoint: return the persisted/applied report for one master/client policy, including trusted gateway usage and inbound execution evidence.',
+        params: [
+          { name: 'masterGuid', in: 'query', type: 'string', desc: 'Master panel GUID.' },
+          { name: 'clientId', in: 'query', type: 'integer', desc: 'Master client record id.' },
+        ],
       },
     ],
   },

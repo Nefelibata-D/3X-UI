@@ -8,6 +8,11 @@ export const keys = {
     root: () => ['nodes'] as const,
     list: () => ['nodes', 'list'] as const,
   },
+  clash: {
+    root: () => ['clash'] as const,
+    overview: () => ['clash', 'overview'] as const,
+    client: (id: number) => ['clash', 'client', id] as const,
+  },
   hosts: {
     root: () => ['hosts'] as const,
     list: () => ['hosts', 'list'] as const,
@@ -21,6 +26,7 @@ export const keys = {
   },
   settings: {
     root: () => ['settings'] as const,
+    passkeys: () => ['settings', 'passkeys'] as const,
     all: () => ['settings', 'all'] as const,
     defaults: () => ['settings', 'defaults'] as const,
     factoryDefaults: () => ['settings', 'factoryDefaults'] as const,

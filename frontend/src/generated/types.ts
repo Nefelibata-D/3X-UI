@@ -536,6 +536,7 @@ export interface ClientSlim {
   enable: boolean;
   expiryTime: number;
   group?: string;
+  id: number;
   inboundIds: number[];
   limitHwid: number;
   limitIp: number;

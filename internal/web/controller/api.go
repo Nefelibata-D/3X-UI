@@ -122,6 +122,8 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/server/clientIps":            {http.MethodGet: {}, http.MethodPost: {}},
 	"/clients/clientIpsByGuid":     {http.MethodPost: {}},
 	"/hosts/list":                  {http.MethodGet: {}},
+	"/clash/policy/apply":          {http.MethodPost: {}},
+	"/clash/policy/report":         {http.MethodGet: {}},
 }
 
 var nodeAdminScopeAllow = map[string]map[string]struct{}{
@@ -230,6 +232,11 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	// Subscription balancers — client-side balancers for the JSON sub output
 	NewSubBalancerController(api)
+
+	// Project load-balancing gateway policy. Admin/session routes plus the
+	// child-side apply/report endpoints used by a master's node token.
+	NewClashController(api)
+	registerPasskeyManagement(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)

@@ -333,6 +333,7 @@ export function useClients(options: UseClientsOptions = {}) {
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: keys.clients.root() }),
       queryClient.invalidateQueries({ queryKey: keys.inbounds.root() }),
+      queryClient.invalidateQueries({ queryKey: keys.clash.root() }),
       queryClient.invalidateQueries({ queryKey: keys.xray.config() }),
     ]);
   }, [queryClient]);

@@ -1,0 +1,12 @@
+.client-node-traffic { display: flex; flex-direction: column; gap: 8px; }
+.client-node-traffic-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.client-node-traffic-name { width: 64px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.client-node-traffic-row .client-traffic-cell { flex: 1; min-width: 150px; }
+.client-node-traffic-row .client-traffic-cell-used,
+.client-node-traffic-row .client-traffic-cell-limit { flex: 0 0 auto; min-width: 0; }
+.client-node-traffic-row .client-traffic-cell-used,
+.client-node-traffic-row .client-traffic-cell-limit { flex: 0 0 56px; min-width: 56px; }
+.client-node-traffic-row .client-traffic-cell-used { text-align: center; }
+.client-node-traffic-row .client-traffic-cell-limit { text-align: center; }
+.client-node-traffic-row .client-traffic-cell-bar { flex: 1; width: auto; }
+.client-node-traffic-error { color: var(--ant-color-error, #cf1322); font-size: 12px; white-space: nowrap; }

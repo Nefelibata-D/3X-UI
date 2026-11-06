@@ -47,7 +47,8 @@ describe('panel navigation', () => {
       ),
     );
     for (const route of PANEL_ROUTES) {
-      expect(enKeys.has(route.titleKey)).toBe(true);
+      if (route.title) expect(route.title.trim()).not.toBe('');
+      else expect(enKeys.has(route.titleKey)).toBe(true);
     }
   });
 

@@ -408,6 +408,7 @@ export function useInbounds() {
     // needs invalidating too or that list stays stale until a hard refresh.
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: keys.inbounds.root() }),
+      queryClient.invalidateQueries({ queryKey: keys.clash.root() }),
       queryClient.invalidateQueries({ queryKey: keys.clients.onlines() }),
       queryClient.invalidateQueries({ queryKey: keys.clients.onlinesByGuid() }),
       queryClient.invalidateQueries({ queryKey: keys.clients.activeInbounds() }),

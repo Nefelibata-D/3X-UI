@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import templateValidatorPlugin from './scripts/template-validator-plugin.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 const outDir = path.resolve(import.meta.dirname, '../internal/web/dist');
-const BACKEND_TARGET = 'http://localhost:2053';
+const BACKEND_TARGET = 'http://127.0.0.1:2053';
 
 function resolveDBPath() {
   const envFolder = process.env.XUI_DB_FOLDER;
@@ -203,7 +204,7 @@ const SWAGGER_ONLY_DEPS = [
 ];
 
 export default defineConfig({
-  plugins: [react(), injectBasePathPlugin(), rocketLoaderOptOutPlugin()],
+  plugins: [templateValidatorPlugin(), react(), injectBasePathPlugin(), rocketLoaderOptOutPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
@@ -211,6 +212,7 @@ export default defineConfig({
   },
   experimental: {
     renderBuiltUrl(filename, { hostType }) {
+      if (hostType === 'css') return { relative: true };
       if (hostType === 'js') {
         return {
           runtime: `((window.X_UI_BASE_PATH||'/')+${JSON.stringify(filename)})`,
@@ -286,11 +288,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '^/(?:[^/]+/)?(login|logout|getTwoFactorEnable|csrf-token|sponsors|panel|server)(?:/|$)': makeBackendProxy(BACKEND_TARGET),
+      '^/(?:[^/]+/)?(login|logout|getTwoFactorEnable|csrf-token|rulesets|sponsors|panel|server)(?:/|$)': makeBackendProxy(BACKEND_TARGET),
       '^/$': makeBackendProxy(BACKEND_TARGET),
       '^/[^/]+/$': makeBackendProxy(BACKEND_TARGET),
       '^/(?:[^/]+/)?ws$': {
-        target: 'ws://localhost:2053',
+        target: 'ws://127.0.0.1:2053',
         ws: true,
         changeOrigin: true,
         rewrite: rewriteToBackend,

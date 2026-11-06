@@ -68,11 +68,11 @@ import type {
   ExternalLink,
   ExternalLinkInput,
 } from '@/hooks/useClients';
-import ClientTrafficCell from '@/components/clients/ClientTrafficCell';
+import ClientNodeTraffic from './ClientNodeTraffic';
 import ClientSpeedTag, { isActiveSpeed } from '@/components/clients/ClientSpeedTag';
 import ClientCardComment from '@/components/clients/ClientCardComment';
 import AppSidebar from '@/layouts/AppSidebar';
-import { IntlUtil, SizeFormatter } from '@/utils';
+import { IntlUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import { LazyMount } from '@/components/utility';
 import {
@@ -82,6 +82,7 @@ import {
 } from '@/components/utility/speedTagStyle';
 const ClientFormModal = lazy(() => import('./ClientFormModal'));
 const ClientInfoModal = lazy(() => import('./ClientInfoModal'));
+const ClientSubscriptionModal = lazy(() => import('./ClientSubscriptionModal'));
 const ClientQrModal = lazy(() => import('./ClientQrModal'));
 const ClientBulkAddModal = lazy(() => import('./ClientBulkAddModal'));
 const ClientBulkAdjustModal = lazy(() => import('./ClientBulkAdjustModal'));
@@ -402,6 +403,7 @@ export default function ClientsPage() {
     {},
   );
   const [infoOpen, setInfoOpen] = useState(false);
+  const [subscriptionEmail, setSubscriptionEmail] = useState<string>();
   const [infoClient, setInfoClient] = useState<ClientRecord | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrClient, setQrClient] = useState<ClientRecord | null>(null);
@@ -621,28 +623,11 @@ export default function ClientsPage() {
   // of the file (table dataSource, mobile cards, select-all) doesn't need
   // a rename.
   const filteredClients = clients;
+  const subscriptionClient = clients.find((client) => client.email === subscriptionEmail);
 
   // Sort is server-side now; the page already arrives in the requested
   // order, so we just hand it through.
   const sortedClients = filteredClients;
-
-  function remainingLabel(row: ClientRecord) {
-    const total = row.totalGB || 0;
-    if (total <= 0) return '∞';
-    const used = (row.traffic?.up || 0) + (row.traffic?.down || 0);
-    const r = total - used;
-    return r > 0 ? SizeFormatter.sizeFormat(r) : '0';
-  }
-
-  function remainingColor(row: ClientRecord): string {
-    const total = row.totalGB || 0;
-    if (total <= 0) return 'purple';
-    const used = (row.traffic?.up || 0) + (row.traffic?.down || 0);
-    const ratio = used / total;
-    if (ratio >= 1) return 'red';
-    if (ratio >= 0.85) return 'orange';
-    return 'green';
-  }
 
   function expiryLabel(row: ClientRecord) {
     if (!row.expiryTime) return '∞';
@@ -1065,6 +1050,7 @@ export default function ClientsPage() {
           <ClientRowActions
             email={record.email}
             onShowQr={onShowQr}
+            onSubscription={setSubscriptionEmail}
             onShowInfo={onShowInfo}
             onResetTraffic={onResetTraffic}
             onEdit={onEdit}
@@ -1179,19 +1165,13 @@ export default function ClientsPage() {
       {
         title: t('pages.clients.traffic'),
         key: 'traffic',
-        width: 300,
+        width: 380,
         render: (_v, record) => (
-          <ClientTrafficCell
-            up={record.traffic?.up}
-            down={record.traffic?.down}
-            total={record.totalGB}
-            enabled={record.enable}
-            trafficDiff={trafficDiff}
-          />
+          <ClientNodeTraffic clientId={record.id} />
         ),
       },
       {
-        title: t('pages.clients.speed'),
+        title: <Tooltip title="客户端实时上传 / 下载速率，不是限速配置">实时速度</Tooltip>,
         key: 'speed',
         width: SPEED_COLUMN_WIDTH,
         align: 'center',
@@ -1208,15 +1188,10 @@ export default function ClientsPage() {
         },
       },
       {
-        title: t('pages.clients.remaining'),
-        key: 'remaining',
-        width: 130,
-        render: (_v, record) => <Tag color={remainingColor(record)}>{remainingLabel(record)}</Tag>,
-      },
-      {
         title: t('pages.clients.duration'),
         key: 'expiryTime',
         width: 130,
+        align: 'center',
         render: (_v, record) => (
           <Tooltip title={expiryLabel(record)}>
             <Tag color={expiryColor(record)}>
@@ -1815,6 +1790,7 @@ export default function ClientsPage() {
                                         placement="bottomRight"
                                         menu={{
                                           items: [
+                                            { key: 'clash-subscription', label: 'Clash 订阅', icon: <LinkOutlined aria-hidden />, onClick: () => setSubscriptionEmail(row.email) },
                                             {
                                               key: 'qr',
                                               label: (
@@ -1868,14 +1844,7 @@ export default function ClientsPage() {
                                     </div>
                                   </div>
                                   <ClientCardComment comment={row.comment} />
-                                  <ClientTrafficCell
-                                    compact
-                                    up={row.traffic?.up}
-                                    down={row.traffic?.down}
-                                    total={row.totalGB}
-                                    enabled={row.enable}
-                                    trafficDiff={trafficDiff}
-                                  />
+                                  <ClientNodeTraffic clientId={row.id} />
                                   {(() => {
                                     const speed = clientSpeed[row.email];
                                     if (!isActiveSpeed(speed)) return null;
@@ -1914,6 +1883,9 @@ export default function ClientsPage() {
             resetTraffic={resetTraffic}
             onOpenChange={setFormOpen}
           />
+        </LazyMount>
+        <LazyMount when={!!subscriptionClient}>
+          {subscriptionClient && <ClientSubscriptionModal key={subscriptionClient.id} client={subscriptionClient} subscriptionURL={subSettings?.subClashEnable && subSettings.subClashURI ? subSettings.subClashURI + subscriptionClient.subId : undefined} onClose={() => setSubscriptionEmail(undefined)} />}
         </LazyMount>
         <LazyMount when={infoOpen}>
           <ClientInfoModal

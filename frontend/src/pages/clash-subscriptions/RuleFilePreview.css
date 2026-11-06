@@ -1,0 +1,47 @@
+.clash-rule-file {
+  background: #152622;
+  color: #e6f3ef;
+  border-radius: 12px;
+  padding: 16px;
+  overflow: auto;
+  max-height: 65vh;
+  font: var(--panel-code-size)/1.55 var(--panel-code-font);
+  white-space: pre;
+  scrollbar-width: thin;
+}
+
+.clash-rule-file[data-dark='true'] {
+  background: #0f1c19;
+  color: #d7eee6;
+}
+
+.clash-rule-viewport {
+  container-type: inline-size;
+  width: 100%;
+  min-width: 0;
+}
+
+.clash-rule-editor .ant-tabs-content-holder {
+  overflow: visible;
+}
+
+.clash-rule-rows {
+  width: calc(100% + 16px);
+  max-height: min(30dvh, 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ant-color-text-quaternary) transparent;
+  padding-inline-end: 0;
+}
+
+.clash-rule-rows > * {
+  width: 100cqi;
+  max-width: 100cqi;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.clash-rule-rows .panel-code-input {
+  min-width: 0;
+}

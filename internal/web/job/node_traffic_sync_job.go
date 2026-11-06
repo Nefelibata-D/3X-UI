@@ -360,6 +360,12 @@ func (j *NodeTrafficSyncJob) maybePushGlobals(mgr *runtime.Manager, nodes []*mod
 // emails online on that node this tick, feeding the delta broadcast above the
 // snapshot threshold; nil on any failure path.
 func (j *NodeTrafficSyncJob) syncOne(mgr *runtime.Manager, n *model.Node, doIpSync bool) []string {
+	release, err := service.BeginNodeSync(n.Id)
+	if err != nil {
+		return nil
+	}
+	defer release()
+
 	rt, err := mgr.RemoteFor(n)
 	if err != nil {
 		logger.Warningf("node traffic sync: remote lookup failed for %s: %v", n.Name, err)

@@ -2275,6 +2275,9 @@
             "example": "staff",
             "type": "string"
           },
+          "id": {
+            "type": "integer"
+          },
           "inboundIds": {
             "example": [
               3,
@@ -2337,6 +2340,7 @@
           "email",
           "enable",
           "expiryTime",
+          "id",
           "inboundIds",
           "limitHwid",
           "limitIp",
@@ -5019,6 +5023,10 @@
   ],
   "tags": [
     {
+      "name": "Passkeys",
+      "description": "WebAuthn passkeys. Management requires an administrator browser session and CSRF; bearer tokens are rejected. One RP domain is shared by all administrators; changing it atomically deletes all credentials and pending ceremonies. Login requires user verification and creates the standard panel session."
+    },
+    {
       "name": "Authentication",
       "description": "Two authentication modes are supported. UI sessions use a cookie set by the login endpoint. Programmatic clients (bots, scripts, remote panels) authenticate with a Bearer token taken from Settings → Security → API Token. Both work for every endpoint under /panel/api/*."
     },
@@ -5063,6 +5071,10 @@
       "description": "Client-side balancers for the JSON subscription: each enabled balancer is emitted as one extra config document whose members are the proxy outbounds of the selected inbounds (routing.balancers + burstObservatory). Managed in Settings → Sub Balancers."
     },
     {
+      "name": "Load Balancing Gateway",
+      "description": "Project node weights, per-client per-node quotas and ratio overrides and the child-side gateway policy API. The child apply/report routes are authenticated with the master node-sync token; the remaining routes use the admin session or an admin API token."
+    },
+    {
       "name": "Subscription Server",
       "description": "A separate HTTP/HTTPS server that serves proxy subscription links (standard, JSON, and Clash) to clients. The server listens on its own port (default 2096) and is configured in Settings → Subscription. Fresh panels generate random path prefixes for each format; all paths remain configurable. Every subscription endpoint sets response headers for client apps to read traffic/expiry info."
     },
@@ -5072,6 +5084,342 @@
     }
   ],
   "paths": {
+    "/panel/api/clash/passkeys": {
+      "get": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Get the configured domain and this administrator’s passkeys.",
+        "operationId": "get_panel_api_clash_passkeys",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/panel/api/clash/passkeys/domain": {
+      "post": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Set the single domain; a different domain permanently revokes every passkey.",
+        "operationId": "post_panel_api_clash_passkeys_domain",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "domain"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/panel/api/clash/passkeys/delete": {
+      "post": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Delete a passkey belonging to the current administrator.",
+        "operationId": "post_panel_api_clash_passkeys_delete",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/panel/api/clash/passkeys/register/begin": {
+      "post": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Start registration; returns requestId and WebAuthn options. Origin must match the configured domain.",
+        "operationId": "post_panel_api_clash_passkeys_register_begin",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/panel/api/clash/passkeys/register/finish": {
+      "post": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Verify and store the passkey. Challenges expire after five minutes and can be consumed once.",
+        "operationId": "post_panel_api_clash_passkeys_register_finish",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "requestId": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "credential": {
+                    "type": "object",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "name",
+                  "requestId",
+                  "credential"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/passkey/login/begin": {
+      "post": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Start discoverable passkey login. Requires anonymous session CSRF and a matching Origin. Returns requestId and WebAuthn options.",
+        "operationId": "post_passkey_login_begin",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/passkey/login/finish": {
+      "post": {
+        "tags": [
+          "Passkeys"
+        ],
+        "summary": "Verify a user-verified WebAuthn assertion and create the normal panel session.",
+        "operationId": "post_passkey_login_finish",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "credential": {
+                    "type": "object",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "requestId",
+                  "credential"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/login": {
       "post": {
         "tags": [
@@ -8639,6 +8987,7 @@
                         "enable": true,
                         "expiryTime": 1735689600000,
                         "group": "staff",
+                        "id": 0,
                         "inboundIds": [
                           3,
                           5
@@ -15780,6 +16129,577 @@
                     "sortOrder": 1,
                     "strategy": "random",
                     "updatedAt": 1710000000000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/clients/{id}/subscription": {
+      "get": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Get template binding, disabled inherited entries, YAML overrides and authorized node injection mappings for the official subscription identity.",
+        "operationId": "get_panel_api_clash_clients_id_subscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Save subscription binding. templateId=0 removes binding. Rule identity is type plus predicate; providers and groups replace by name. Shared SubID clients share this binding.",
+        "operationId": "post_panel_api_clash_clients_id_subscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/templates/{id}": {
+      "delete": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Delete a YAML subscription template by ID. Requires admin authentication and Clash subscriptions enabled.",
+        "operationId": "delete_panel_api_clash_templates_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/clients/{id}/subscription/proxies": {
+      "get": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "List authorized proxies with their official generated Clash configurations and node keys for administrator subscription preview.",
+        "operationId": "get_panel_api_clash_clients_id_subscription_proxies",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/clients/{id}/subscription/validate": {
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Validate a subscription draft after real node injection, including blacklist completeness and dialer cycles. Does not save.",
+        "operationId": "post_panel_api_clash_clients_id_subscription_validate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/overview": {
+      "get": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Return node weights, computed default ratios, and the last applied/observed policy state for this panel and its nodes.",
+        "operationId": "get_panel_api_clash_overview",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/weights": {
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Save node capacityBytes (0 means unlimited), resetSchedule (day 1..31, minute 0..1439 in panel timezone), and default weights. Finite capacity must cover all explicit client allocations.",
+        "operationId": "post_panel_api_clash_weights",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "items": [
+                  {
+                    "nodeKey": "local",
+                    "defaultWeight": 3,
+                    "capacityBytes": 107374182400,
+                    "resetSchedule": {
+                      "day": 15,
+                      "minute": 120,
+                      "disabled": false
+                    }
+                  },
+                  {
+                    "nodeKey": "node:1",
+                    "defaultWeight": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/sync": {
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Run one master-to-child policy reconciliation and return its status.",
+        "operationId": "post_panel_api_clash_sync",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/clients/{id}": {
+      "get": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Return a client ratio override plus its authorized outlets, inherited default ratios and normalized preview. The id is the stable official client record id.",
+        "operationId": "get_panel_api_clash_clients_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Official client record id.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/clients/{id}/ratio": {
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Save per-node byte allocations and inherit/custom weights. resetMode is node (follow each node schedule) or manual. Limit 0 is only allowed on unlimited nodes.",
+        "operationId": "post_panel_api_clash_clients_id_ratio",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Official client record id.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "mode": "custom",
+                "resetMode": "node",
+                "weights": {
+                  "local": 1,
+                  "node:1": 3
+                },
+                "limits": {
+                  "local": 0,
+                  "node:1": 107374182400
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/policies/reset": {
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Request a usage/grace reset for one node/client policy. The child applies it locally and re-enables only inbounds the gateway disabled.",
+        "operationId": "post_panel_api_clash_policies_reset",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nodeKey": "node:1",
+                "clientId": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/policy/apply": {
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Child endpoint: apply one node/client quota policy. Bound to the child panel GUID and authenticated by the master node-sync token.",
+        "operationId": "post_panel_api_clash_policy_apply",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "masterGuid": "...",
+                "targetGuid": "...",
+                "clientId": 1,
+                "clientEmail": "user1",
+                "revision": 1,
+                "budgetBytes": 107374182400,
+                "graceSeconds": 600,
+                "gracePercent": 10,
+                "effectiveRatio": 1,
+                "periodTimezone": "Asia/Shanghai"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clash/policy/report": {
+      "get": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Child endpoint: return the persisted/applied report for one master/client policy, including trusted gateway usage and inbound execution evidence.",
+        "operationId": "get_panel_api_clash_policy_report",
+        "parameters": [
+          {
+            "name": "masterGuid",
+            "in": "query",
+            "required": true,
+            "description": "Master panel GUID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "in": "query",
+            "required": true,
+            "description": "Master client record id.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
                   }
                 }
               }

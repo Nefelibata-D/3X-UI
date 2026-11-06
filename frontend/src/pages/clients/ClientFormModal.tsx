@@ -23,6 +23,7 @@ import {
   DeleteOutlined,
   EyeOutlined,
   PlusOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined,
   RetweetOutlined,
 } from '@ant-design/icons';
@@ -38,6 +39,7 @@ import { resolveExternalLinkExpiry } from '@/lib/clients/external-link';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import { useClientHwids } from '@/hooks/useClientHwids';
 import { useRawHostsQuery } from '@/api/queries/useRawHostsQuery';
+import { useClashClientRatioQuery } from '@/api/queries/useClashClientRatioQuery';
 import { DateTimePicker, SelectAllClearButtons } from '@/components/form';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import ClientHwidListModal from '@/components/clients/ClientHwidList';
@@ -55,6 +57,8 @@ import type {
 } from '@/hooks/useClients';
 import { useFail2banStatusQuery, getLimitIpNotice } from '@/api/queries/useFail2banStatusQuery';
 import ClientRenewalFields from './ClientRenewalFields';
+import ClientLoadBalancingTab from './ClientLoadBalancingTab';
+import ClientNodeResetMode from './ClientNodeResetMode';
 import { ClientFormSchema, ClientCreateFormSchema, type ClientFormValues } from '@/schemas/client';
 import './ClientFormModal.css';
 
@@ -280,6 +284,16 @@ export default function ClientFormModal({
   const email = useWatch({ control: methods.control, name: 'email' });
   const uuid = useWatch({ control: methods.control, name: 'uuid' });
   const trafficReset = useWatch({ control: methods.control, name: 'trafficReset' });
+  const totalGB = useWatch({ control: methods.control, name: 'totalGB' });
+  const nodeRatioQuery = useClashClientRatioQuery(isEdit ? client?.id : undefined);
+  const draftTotalBytes = gbToBytes(Number(totalGB) || 0);
+  const nodeQuotaRows = nodeRatioQuery.data?.nodes ?? [];
+  const totalAllocatedNodeQuota = nodeQuotaRows.reduce((sum, node) => sum + node.budgetBytes, 0);
+  const hasUnlimitedNodeQuota = nodeQuotaRows.some((node) => node.budgetBytes === 0);
+  const totalNodeQuotaConflict = draftTotalBytes > 0 && (hasUnlimitedNodeQuota || totalAllocatedNodeQuota > draftTotalBytes);
+  const totalNodeQuotaError = hasUnlimitedNodeQuota
+    ? '存在无限节点额度，不能设置有限的客户端总流量'
+    : '节点额度合计超过客户端总流量上限';
   const password = useWatch({ control: methods.control, name: 'password' });
   const subId = useWatch({ control: methods.control, name: 'subId' });
   const limitHwid = useWatch({ control: methods.control, name: 'limitHwid' });
@@ -292,6 +306,7 @@ export default function ClientFormModal({
     remove: removeExternalLink,
   } = useFieldArray({ control: methods.control, name: 'externalLinks' });
 
+  const [activeTab, setActiveTab] = useState("basic");
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [clientIps, setClientIps] = useState<ClientIpInfo[]>([]);
@@ -351,6 +366,7 @@ export default function ClientFormModal({
 
   useEffect(() => {
     if (!open) return;
+    setActiveTab("basic");
     setIpsModalOpen(false);
     setHwidsModalOpen(false);
 
@@ -906,7 +922,7 @@ export default function ClientFormModal({
           body: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto', overflowX: 'hidden' },
         }}
         onCancel={close}
-        footer={
+        footer={activeTab === "loadBalancing" ? null :
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {isEdit && resetTraffic && (
               <Popconfirm
@@ -939,7 +955,8 @@ export default function ClientFormModal({
         <FormProvider {...methods}>
           <Form layout="vertical">
             <Tabs
-              defaultActiveKey="basic"
+              activeKey={activeTab}
+              onChange={setActiveTab}
               items={[
                 {
                   key: 'basic',
@@ -978,9 +995,10 @@ export default function ClientFormModal({
                             name="totalGB"
                             label={t('pages.clients.totalGB')}
                             tooltip={t('pages.clients.totalGBDesc')}
+                            extra={totalNodeQuotaConflict ? <Typography.Text type="danger">{totalNodeQuotaError}</Typography.Text> : undefined}
                             transform={{ output: (v) => Number(v) || 0 }}
                           >
-                            <InputNumber min={0} step={1} style={{ width: '100%' }} />
+                            <InputNumber min={0} step={1} status={totalNodeQuotaConflict ? 'error' : undefined} style={{ width: '100%' }} />
                           </FormField>
                         </Col>
                         <Col xs={24} md={12}>
@@ -1116,6 +1134,13 @@ export default function ClientFormModal({
                             />
                           </FormField>
                         </Col>
+                        {trafficReset === 'never' && (
+                          <Col xs={24} md={12}>
+                            <Form.Item label={<span>节点流量重置 <Tooltip title="总流量重置开启时，节点流量会与总流量同时清零；总流量重置关闭时，可单独设置节点流量的重置方式。"><QuestionCircleOutlined aria-label="节点流量重置说明" /></Tooltip></span>}>
+                              <ClientNodeResetMode clientId={isEdit ? client?.id : undefined} />
+                            </Form.Item>
+                          </Col>
+                        )}
                         {trafficReset === 'monthly' && (
                           <Col xs={24} md={12}>
                             <FormField
@@ -1706,6 +1731,17 @@ export default function ClientFormModal({
                         )}
                       </div>
                     </>
+                  ),
+                },
+                {
+                  key: 'loadBalancing',
+                  label: '负载均衡',
+                  children: (
+                    <ClientLoadBalancingTab
+                      clientId={client?.id}
+                      email={email}
+                      mode={isEdit ? 'edit' : 'add'}
+                    />
                   ),
                 },
               ]}

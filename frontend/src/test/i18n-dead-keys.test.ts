@@ -73,9 +73,12 @@ describe('i18n keys', () => {
     prefixes.push(match[1]);
   }
 
+  // Project UI removes the sponsors entry; keep upstream locale files untouched.
+  const removedProjectMenuKeys = new Set(['menu.sponsors']);
+
   it('every en-US key is referenced by the frontend or Go sources', () => {
     const dead = enKeys.filter(
-      (key) => !tokens.has(key) && !prefixes.some((p) => key.startsWith(p)),
+      (key) => !removedProjectMenuKeys.has(key) && !tokens.has(key) && !prefixes.some((p) => key.startsWith(p)),
     );
     expect(dead, `dead i18n keys (delete from all 14 locales):\n  ${dead.join('\n  ')}`).toEqual(
       [],

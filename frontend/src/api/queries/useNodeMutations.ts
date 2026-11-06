@@ -47,7 +47,12 @@ export function useNodeMutations() {
   const removeMut = useMutation({
     mutationFn: (id: number) => HttpUtil.post(`/panel/api/nodes/del/${id}`),
     onSuccess: (msg) => {
-      if (msg?.success) invalidate();
+      if (msg?.success) {
+        invalidate();
+        queryClient.invalidateQueries({ queryKey: keys.inbounds.root() });
+        queryClient.invalidateQueries({ queryKey: keys.clients.root() });
+        queryClient.invalidateQueries({ queryKey: keys.clash.root() });
+      }
     },
   });
 

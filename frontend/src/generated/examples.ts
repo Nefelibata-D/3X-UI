@@ -474,6 +474,7 @@ export const EXAMPLES: Record<string, unknown> = {
         "enable": true,
         "expiryTime": 1735689600000,
         "group": "staff",
+        "id": 0,
         "inboundIds": [
           3,
           5
@@ -578,6 +579,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "enable": true,
     "expiryTime": 1735689600000,
     "group": "staff",
+    "id": 0,
     "inboundIds": [
       3,
       5

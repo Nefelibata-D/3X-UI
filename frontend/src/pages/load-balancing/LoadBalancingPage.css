@@ -1,0 +1,157 @@
+.load-balancing-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 4px 0 24px;
+}
+
+.nodes-page {
+  min-width: 0;
+}
+
+.nodes-page .content-shell {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.nodes-page .content-area {
+  min-width: 0;
+  width: auto;
+}
+
+.lb-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  width: 100%;
+  gap: 12px;
+}
+
+.lb-header > div {
+  min-width: 0;
+}
+
+.lb-header > .ant-space {
+  justify-self: end;
+}
+
+.lb-summary-card .ant-card-body {
+  padding: 20px 24px;
+}
+
+.lb-stat-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.lb-stat-dot-online,
+.lb-stat-dot-pending { background: #4778f5; }
+.lb-stat-dot-normal { background: #52c41a; }
+.lb-stat-dot-grace { background: #faad14; }
+.lb-stat-dot-disabled { background: #c9c9c9; }
+
+.lb-tabs,
+.lb-tabs .ant-tabs-content-holder,
+.lb-tabs .ant-tabs-tabpane {
+  min-width: 0;
+}
+
+.lb-tabs .ant-tabs-content-holder {
+  overflow: visible;
+}
+
+.lb-policy-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.lb-policy-filters .ant-select {
+  flex: 0 1 240px;
+  min-width: min(100%, 200px);
+}
+
+.load-balancing-page .ant-card,
+.load-balancing-page .ant-card-body,
+.load-balancing-page .ant-table-wrapper,
+.load-balancing-page .ant-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.load-balancing-page .ant-table-cell {
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.load-balancing-page .ant-space-vertical { max-width: 100%; }
+.load-balancing-page .ant-tag { margin-inline-end: 0; }
+
+.load-balancing-page .lb-number-input {
+  width: 100%;
+  max-width: 140px;
+}
+
+.load-balancing-page .lb-reset-picker {
+  width: 100%;
+  max-width: 190px;
+}
+
+.lb-client-node {
+  max-width: 100%;
+}
+
+.lb-managed-inbounds {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lb-managed-inbound {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.lb-managed-inbound .ant-space {
+  justify-content: center;
+  max-width: 100%;
+}
+
+.lb-inbound-address {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  .lb-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lb-header > .ant-space {
+    justify-self: start;
+  }
+
+  .load-balancing-page .ant-card-head {
+    padding-inline: 12px;
+  }
+
+  .load-balancing-page .ant-card-body {
+    padding: 12px;
+  }
+}

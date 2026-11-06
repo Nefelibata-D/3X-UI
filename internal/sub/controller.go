@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -541,6 +542,9 @@ func (a *SUBController) subs(c *gin.Context) {
 func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
 	if c.Request == nil || c.Request.Method != http.MethodGet || c.Writer.Status() != http.StatusOK {
 		return
+	}
+	if err := clash.RecordClientSubscriptionSync(c.Param("subid"), c.Request.UserAgent()); err != nil {
+		logger.Warning("Failed to record Clash Verge subscription sync:", err)
 	}
 	if err := a.subService.RecordSubscriptionFetch(c.Param("subid")); err != nil {
 		logger.Warning("Failed to record subscription fetch:", err)

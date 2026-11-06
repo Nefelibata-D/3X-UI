@@ -21,6 +21,7 @@ export function useWebSocketBridge() {
       if (invalidateTimer != null) clearTimeout(invalidateTimer);
       invalidateTimer = window.setTimeout(() => {
         invalidateTimer = null;
+        queryClient.invalidateQueries({ queryKey: keys.clash.root() });
         if (isRecentLocalInvalidate()) return;
         if (p.type === 'inbounds') {
           queryClient.invalidateQueries({ queryKey: ['inbounds'] });

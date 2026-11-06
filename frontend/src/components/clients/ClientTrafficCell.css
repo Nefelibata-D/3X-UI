@@ -18,16 +18,14 @@
 
 .client-traffic-cell-used,
 .client-traffic-cell-limit {
-  flex: 0 0 72px;
-  min-width: 72px;
+  flex: 0 0 64px;
+  min-width: 64px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .client-traffic-cell.is-compact .client-traffic-cell-used {
-  flex-basis: 64px;
-  min-width: 64px;
   font-size: 11px;
 }
 
@@ -68,7 +66,8 @@
 .client-traffic-cell-infinity {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  width: 100%;
   color: var(--ant-color-purple);
   font-size: 14px;
   line-height: 1;

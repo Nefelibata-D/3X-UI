@@ -44,3 +44,12 @@ docker-compose.override.yml
 
 # Ignore .env (Environment Variables) file
 .env
+
+# Project tests are local-only and never committed
+test/
+
+# Local npm cache
+/frontend/.npm-cache/
+
+# Go cache
+.local

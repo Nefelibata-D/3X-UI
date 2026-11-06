@@ -9,12 +9,10 @@ import {
   ClockCircleOutlined,
   CloseCircleFilled,
   CloudServerOutlined,
-  ClusterOutlined,
   CodeOutlined,
   CopyOutlined,
   DashboardOutlined,
   DatabaseOutlined,
-  DiscordOutlined,
   ExportOutlined,
   FileTextOutlined,
   ImportOutlined,
@@ -28,7 +26,6 @@ import {
   SettingOutlined,
   SunOutlined,
   SwapOutlined,
-  TelegramFilled,
   ToolOutlined,
 } from '@ant-design/icons';
 
@@ -77,13 +74,12 @@ export const PALETTE_KEYWORDS: Record<string, string[]> = {
   '/clients': ['clients', 'users', 'sub', 'traffic', 'quota'],
   '/groups': ['groups', 'tags', 'batch'],
   '/nodes': ['nodes', 'servers', 'cluster', 'remote nodes'],
+  '/load-balancing': ['load balancing', 'budget', 'quota', 'gateway', 'grace', 'traffic'],
   '/hosts': ['hosts', 'sni', 'domains'],
   '/outbound': ['outbounds', 'freedom', 'blackhole', 'socks', 'http', 'warp', 'nord', 'pia'],
   '/routing': ['routing', 'rules', 'geoip', 'geosite', 'direct', 'block'],
-  '/settings': ['settings', 'config', 'port', 'password', 'ssl', 'telegram'],
-  '/xray': ['xray', 'templates', 'balancer', 'dns'],
-  '/api-docs': ['api', 'api docs', 'swagger', 'rest api', 'endpoints'],
-  '/sponsors': ['sponsors', 'sponsor', 'partners'],
+  '/settings': ['settings', 'config', 'port', 'password', 'ssl'],
+  '/xray': ['xray', 'templates', 'dns'],
 };
 
 export default function CommandPalette() {
@@ -367,9 +363,9 @@ export default function CommandPalette() {
       });
     });
 
-    const pages = PANEL_ROUTES.map((route) => ({
+    const pages = PANEL_ROUTES.filter((route) => route.path !== '/clash-subscriptions' || allSetting.subClashEnable).map((route) => ({
       path: route.path,
-      title: t(route.titleKey),
+      title: route.title ?? t(route.titleKey),
       keywords: PALETTE_KEYWORDS[route.path] ?? [],
       icon: <route.icon aria-hidden />,
     }));
@@ -406,25 +402,11 @@ export default function CommandPalette() {
         icon: <SafetyOutlined aria-hidden />,
       },
       {
-        path: '/settings#telegram',
-        title: `${t('menu.settings')} · ${t('pages.settings.TGBotSettings')}`,
-        subtitle: t('pages.settings.TGBotSettings'),
-        keywords: ['telegram', 'tgbot', 'bot token', 'chat id', 'notifications', 'alerts'],
-        icon: <TelegramFilled aria-hidden />,
-      },
-      {
         path: '/settings#email',
         title: `${t('menu.settings')} · ${t('pages.settings.emailSettings')}`,
         subtitle: t('pages.settings.emailSettings'),
         keywords: ['email', 'smtp', 'mail', 'crash alerts'],
         icon: <MailOutlined aria-hidden />,
-      },
-      {
-        path: '/settings#discord',
-        title: `${t('menu.settings')} · ${t('pages.settings.discordSettings')}`,
-        subtitle: t('pages.settings.discordSettings'),
-        keywords: ['discord', 'bot', 'channel', 'notifications', 'alerts'],
-        icon: <DiscordOutlined aria-hidden />,
       },
       {
         path: '/settings#subscription',
@@ -482,13 +464,6 @@ export default function CommandPalette() {
         subtitle: t('pages.xray.logConfigs'),
         keywords: ['logs', 'access log', 'error log', 'dns log', 'mask address', 'loglevel'],
         icon: <FileTextOutlined aria-hidden />,
-      },
-      {
-        path: '/xray#balancer',
-        title: `${t('menu.xray')} · ${t('pages.xray.Balancers')}`,
-        subtitle: t('pages.xray.Balancers'),
-        keywords: ['balancers', 'leastPing', 'roundRobin', 'fallback', 'strategy'],
-        icon: <ClusterOutlined aria-hidden />,
       },
       {
         path: '/xray#dns',
@@ -591,6 +566,7 @@ export default function CommandPalette() {
     inbounds,
     isDark,
     isUltra,
+    allSetting.subClashEnable,
     allSetting.subURI,
     t,
     close,

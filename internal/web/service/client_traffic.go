@@ -3,6 +3,7 @@ package service
 import (
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -42,6 +43,9 @@ func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email st
 			return nr, applyErr
 		}
 		needRestart = nr
+	}
+	if err := clash.RequestClientReset(rec.Id); err != nil {
+		return needRestart, err
 	}
 
 	// Enable only once the counters are zero: a still-depleted client enabled

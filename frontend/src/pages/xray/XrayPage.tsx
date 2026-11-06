@@ -29,7 +29,6 @@ import { BasicsTab } from './basics';
 import { propagateOutboundTagRename } from './basics/helpers';
 import { RoutingTab } from './routing';
 import { OutboundsTab } from './outbounds';
-import { BalancersTab } from './balancers';
 import {
   cleanupOrphanedBalancerLoopbacks,
   ensureMissingBalancerLoopbacks,
@@ -39,7 +38,7 @@ import { DnsTab } from './dns';
 import { WarpModal, NordModal, PiaModal } from './overrides';
 import './XrayPage.css';
 
-const SECTION_SLUGS = ['basic', 'routing', 'outbound', 'balancer', 'dns', 'advanced'];
+const SECTION_SLUGS = ['basic', 'routing', 'outbound', 'dns', 'advanced'];
 
 type AdvKey = 'xraySetting' | 'inboundSettings' | 'outboundSettings' | 'routingRuleSettings';
 
@@ -254,16 +253,6 @@ export default function XrayPage() {
             onShowNord={() => setNordOpen(true)}
             onShowPia={() => setPiaOpen(true)}
             onRefreshXrayData={fetchAll}
-          />
-        );
-      case 'balancer':
-        return (
-          <BalancersTab
-            templateSettings={templateSettings}
-            setTemplateSettings={setTemplateSettings}
-            clientReverseTags={clientReverseTags}
-            subscriptionOutboundTags={subscriptionOutboundTags}
-            isMobile={isMobile}
           />
         );
       case 'dns':

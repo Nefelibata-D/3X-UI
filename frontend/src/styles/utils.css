@@ -1,3 +1,15 @@
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+:root {
+  --panel-code-font: 'JetBrains Mono Variable', monospace;
+  --panel-code-size: 14px;
+}
+
+code, pre, .ant-input.panel-code-input {
+  font-family: var(--panel-code-font);
+  font-size: var(--panel-code-size);
+}
+
 .mt-4 {
   margin-top: 4px;
 }

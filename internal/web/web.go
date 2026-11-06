@@ -3,6 +3,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"embed"
@@ -19,7 +20,10 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgkern"
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
@@ -79,22 +83,65 @@ func (f *wrapDistFS) Open(name string) (fs.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &wrapAssetsFile{
-		File: file,
-	}, nil
-}
-
-type wrapAssetsFile struct {
-	fs.File
-}
-
-func (f *wrapAssetsFile) Stat() (fs.FileInfo, error) {
-	info, err := f.File.Stat()
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	wrapped := &wrapAssetsFile{file: file, info: info}
+	if info.IsDir() {
+		return wrapped, nil
+	}
+	content, err := io.ReadAll(file)
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return nil, err
 	}
+	wrapped.file = nil
+	wrapped.reader = bytes.NewReader(content)
+	return wrapped, nil
+}
+
+type wrapAssetsFile struct {
+	file   fs.File
+	reader *bytes.Reader
+	info   fs.FileInfo
+}
+
+func (f *wrapAssetsFile) Read(p []byte) (int, error) {
+	if f.reader != nil {
+		return f.reader.Read(p)
+	}
+	return f.file.Read(p)
+}
+
+func (f *wrapAssetsFile) Seek(offset int64, whence int) (int64, error) {
+	if f.reader == nil {
+		return 0, errors.New("cannot seek an asset directory")
+	}
+	return f.reader.Seek(offset, whence)
+}
+
+func (f *wrapAssetsFile) Close() error {
+	if f.file != nil {
+		return f.file.Close()
+	}
+	return nil
+}
+
+func (f *wrapAssetsFile) ReadDir(n int) ([]fs.DirEntry, error) {
+	dir, ok := f.file.(fs.ReadDirFile)
+	if !ok {
+		return nil, errors.New("asset directory does not support ReadDir")
+	}
+	return dir.ReadDir(n)
+}
+
+func (f *wrapAssetsFile) Stat() (fs.FileInfo, error) {
 	return &wrapAssetsFileInfo{
-		FileInfo: info,
+		FileInfo: f.info,
 	}, nil
 }
 
@@ -265,6 +312,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	s.index = controller.NewIndexController(g)
 	s.panel = controller.NewXUIController(g)
 	s.api = controller.NewAPIController(g)
+	controller.RegisterClashStatus(g)
+	controller.RegisterPublishedRules(g)
 
 	// Initialize WebSocket hub
 	s.wsHub = websocket.NewHub()
@@ -562,6 +611,37 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	})
 	runtime.SetManager(mgr)
 	mgr.SetNodeEgressResolver(&s.settingService)
+
+	// Project gateway policy: start before Xray so the generated config can
+	// route managed inbounds through the already-listening gateway. A start
+	// failure is reported in the UI; it must not make the panel unreachable.
+	clash.Configure(clash.Hooks{
+		SetInboundEnabled: func(tag string, enabled bool) error {
+			db := database.GetDB()
+			if db == nil {
+				return errors.New("database is not initialized")
+			}
+			var ib model.Inbound
+			if err := db.Where("tag = ?", tag).First(&ib).Error; err != nil {
+				return err
+			}
+			if ib.NodeID != nil {
+				return fmt.Errorf("inbound %q is not local", tag)
+			}
+			needRestart, err := (&service.InboundService{}).SetInboundEnable(ib.Id, enabled)
+			if err != nil {
+				return err
+			}
+			if needRestart {
+				s.xrayService.SetToNeedRestart()
+			}
+			return nil
+		},
+		ApplyXray: func() error { return s.xrayService.RestartXray(false) },
+	}, service.NewClashCatalogProvider())
+	if err := clash.Start(context.Background()); err != nil {
+		logger.Error("clash runtime start failed:", err)
+	}
 	// Supply the master client certificate for nodes in mtls mode. Issued lazily
 	// from the node CA on first use; runtime stays free of a service import.
 	runtime.SetMasterClientCertProvider(func() (tls.Certificate, error) {
@@ -809,6 +889,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		amneziawgnet.GetOutboundManager().StopAll()
 	}
 	if stopXray {
+		clash.Stop()
 		if err := s.xrayService.StopXray(); err != nil && !errors.Is(err, service.ErrXrayNotRunning) {
 			err2 = common.Combine(err2, err)
 		}

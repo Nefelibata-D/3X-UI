@@ -21,6 +21,7 @@ import { SettingListItem } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import TwoFactorModal from './TwoFactorModal';
+import PasskeyTab from './PasskeyTab';
 import './SecurityTab.css';
 
 interface ApiMsg<T = unknown> {
@@ -369,6 +370,11 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
                 <Switch checked={allSetting.twoFactorEnable} onClick={toggleTwoFactor} />
               </SettingListItem>
             ),
+          },
+          {
+            key: 'passkeys',
+            label: catTabLabel(<SafetyOutlined aria-hidden />, t('passkey.title'), isMobile),
+            children: <PasskeyTab />,
           },
           {
             key: '3',

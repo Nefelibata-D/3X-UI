@@ -1,0 +1,128 @@
+---
+title: Load Balancing Gateway
+description: Project node weights, per-client per-node quotas and ratio
+  overrides and the child-side gateway policy API. The child apply/report routes
+  are authenticated with the master node-sync token; the remaining routes use
+  the admin session or an admin API token.
+full: true
+_openapi:
+  preload:
+    - ./public/openapi.json
+  toc:
+    - depth: 2
+      title: Get template binding, disabled inherited entries, YAML overrides and
+        authorized node injection mappings for the official subscription
+        identity.
+      url: '#get-template-binding-disabled-inherited-entries-yaml-overrides-and-authorized-node-injection-mappings-for-the-official-subscription-identity'
+    - depth: 2
+      title: Save subscription binding. templateId=0 removes binding. Rule identity is
+        type plus predicate; providers and groups replace by name. Shared SubID
+        clients share this binding.
+      url: '#save-subscription-binding-templateid0-removes-binding-rule-identity-is-type-plus-predicate-providers-and-groups-replace-by-name-shared-subid-clients-share-this-binding'
+    - depth: 2
+      title: Delete a YAML subscription template by ID. Requires admin authentication
+        and Clash subscriptions enabled.
+      url: '#delete-a-yaml-subscription-template-by-id-requires-admin-authentication-and-clash-subscriptions-enabled'
+    - depth: 2
+      title: List authorized proxies with their official generated Clash
+        configurations and node keys for administrator subscription preview.
+      url: '#list-authorized-proxies-with-their-official-generated-clash-configurations-and-node-keys-for-administrator-subscription-preview'
+    - depth: 2
+      title: Validate a subscription draft after real node injection, including
+        blacklist completeness and dialer cycles. Does not save.
+      url: '#validate-a-subscription-draft-after-real-node-injection-including-blacklist-completeness-and-dialer-cycles-does-not-save'
+    - depth: 2
+      title: Return node weights, computed default ratios, and the last
+        applied/observed policy state for this panel and its nodes.
+      url: '#return-node-weights-computed-default-ratios-and-the-last-appliedobserved-policy-state-for-this-panel-and-its-nodes'
+    - depth: 2
+      title: Save node capacityBytes (0 means unlimited), resetSchedule (day 1..31,
+        minute 0..1439 in panel timezone), and default weights. Finite capacity
+        must cover all explicit client allocations.
+      url: '#save-node-capacitybytes-0-means-unlimited-resetschedule-day-131-minute-01439-in-panel-timezone-and-default-weights-finite-capacity-must-cover-all-explicit-client-allocations'
+    - depth: 2
+      title: Run one master-to-child policy reconciliation and return its status.
+      url: '#run-one-master-to-child-policy-reconciliation-and-return-its-status'
+    - depth: 2
+      title: Return a client ratio override plus its authorized outlets, inherited
+        default ratios and normalized preview. The id is the stable official
+        client record id.
+      url: '#return-a-client-ratio-override-plus-its-authorized-outlets-inherited-default-ratios-and-normalized-preview-the-id-is-the-stable-official-client-record-id'
+    - depth: 2
+      title: Save per-node byte allocations and inherit/custom weights. resetMode is
+        node (follow each node schedule) or manual. Limit 0 is only allowed on
+        unlimited nodes.
+      url: '#save-per-node-byte-allocations-and-inheritcustom-weights-resetmode-is-node-follow-each-node-schedule-or-manual-limit-0-is-only-allowed-on-unlimited-nodes'
+    - depth: 2
+      title: Request a usage/grace reset for one node/client policy. The child applies
+        it locally and re-enables only inbounds the gateway disabled.
+      url: '#request-a-usagegrace-reset-for-one-nodeclient-policy-the-child-applies-it-locally-and-re-enables-only-inbounds-the-gateway-disabled'
+    - depth: 2
+      title: 'Child endpoint: apply one node/client quota policy. Bound to the child
+        panel GUID and authenticated by the master node-sync token.'
+      url: '#child-endpoint-apply-one-nodeclient-quota-policy-bound-to-the-child-panel-guid-and-authenticated-by-the-master-node-sync-token'
+    - depth: 2
+      title: 'Child endpoint: return the persisted/applied report for one
+        master/client policy, including trusted gateway usage and inbound
+        execution evidence.'
+      url: '#child-endpoint-return-the-persistedapplied-report-for-one-masterclient-policy-including-trusted-gateway-usage-and-inbound-execution-evidence'
+  structuredData:
+    headings:
+      - content: Get template binding, disabled inherited entries, YAML overrides and
+          authorized node injection mappings for the official subscription
+          identity.
+        id: get-template-binding-disabled-inherited-entries-yaml-overrides-and-authorized-node-injection-mappings-for-the-official-subscription-identity
+      - content: Save subscription binding. templateId=0 removes binding. Rule identity
+          is type plus predicate; providers and groups replace by name. Shared
+          SubID clients share this binding.
+        id: save-subscription-binding-templateid0-removes-binding-rule-identity-is-type-plus-predicate-providers-and-groups-replace-by-name-shared-subid-clients-share-this-binding
+      - content: Delete a YAML subscription template by ID. Requires admin
+          authentication and Clash subscriptions enabled.
+        id: delete-a-yaml-subscription-template-by-id-requires-admin-authentication-and-clash-subscriptions-enabled
+      - content: List authorized proxies with their official generated Clash
+          configurations and node keys for administrator subscription preview.
+        id: list-authorized-proxies-with-their-official-generated-clash-configurations-and-node-keys-for-administrator-subscription-preview
+      - content: Validate a subscription draft after real node injection, including
+          blacklist completeness and dialer cycles. Does not save.
+        id: validate-a-subscription-draft-after-real-node-injection-including-blacklist-completeness-and-dialer-cycles-does-not-save
+      - content: Return node weights, computed default ratios, and the last
+          applied/observed policy state for this panel and its nodes.
+        id: return-node-weights-computed-default-ratios-and-the-last-appliedobserved-policy-state-for-this-panel-and-its-nodes
+      - content: Save node capacityBytes (0 means unlimited), resetSchedule (day 1..31,
+          minute 0..1439 in panel timezone), and default weights. Finite
+          capacity must cover all explicit client allocations.
+        id: save-node-capacitybytes-0-means-unlimited-resetschedule-day-131-minute-01439-in-panel-timezone-and-default-weights-finite-capacity-must-cover-all-explicit-client-allocations
+      - content: Run one master-to-child policy reconciliation and return its status.
+        id: run-one-master-to-child-policy-reconciliation-and-return-its-status
+      - content: Return a client ratio override plus its authorized outlets, inherited
+          default ratios and normalized preview. The id is the stable official
+          client record id.
+        id: return-a-client-ratio-override-plus-its-authorized-outlets-inherited-default-ratios-and-normalized-preview-the-id-is-the-stable-official-client-record-id
+      - content: Save per-node byte allocations and inherit/custom weights. resetMode is
+          node (follow each node schedule) or manual. Limit 0 is only allowed on
+          unlimited nodes.
+        id: save-per-node-byte-allocations-and-inheritcustom-weights-resetmode-is-node-follow-each-node-schedule-or-manual-limit-0-is-only-allowed-on-unlimited-nodes
+      - content: Request a usage/grace reset for one node/client policy. The child
+          applies it locally and re-enables only inbounds the gateway disabled.
+        id: request-a-usagegrace-reset-for-one-nodeclient-policy-the-child-applies-it-locally-and-re-enables-only-inbounds-the-gateway-disabled
+      - content: 'Child endpoint: apply one node/client quota policy. Bound to the child
+          panel GUID and authenticated by the master node-sync token.'
+        id: child-endpoint-apply-one-nodeclient-quota-policy-bound-to-the-child-panel-guid-and-authenticated-by-the-master-node-sync-token
+      - content: 'Child endpoint: return the persisted/applied report for one
+          master/client policy, including trusted gateway usage and inbound
+          execution evidence.'
+        id: child-endpoint-return-the-persistedapplied-report-for-one-masterclient-policy-including-trusted-gateway-usage-and-inbound-execution-evidence
+    contents: []
+---
+
+{/* This file was generated by Fumadocs. Do not edit this file directly. Any changes should be made by running the generation command again. */}
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/clash/clients/{id}/subscription","method":"get"},{"path":"/panel/api/clash/clients/{id}/subscription","method":"post"},{"path":"/panel/api/clash/templates/{id}","method":"delete"},{"path":"/panel/api/clash/clients/{id}/subscription/proxies","method":"get"},{"path":"/panel/api/clash/clients/{id}/subscription/validate","method":"post"},{"path":"/panel/api/clash/overview","method":"get"},{"path":"/panel/api/clash/weights","method":"post"},{"path":"/panel/api/clash/sync","method":"post"},{"path":"/panel/api/clash/clients/{id}","method":"get"},{"path":"/panel/api/clash/clients/{id}/ratio","method":"post"},{"path":"/panel/api/clash/policies/reset","method":"post"},{"path":"/panel/api/clash/policy/apply","method":"post"},{"path":"/panel/api/clash/policy/report","method":"get"}]} showTitle />
+    </>
+  );
+}

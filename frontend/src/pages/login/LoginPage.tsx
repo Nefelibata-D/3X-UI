@@ -26,10 +26,10 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { HttpUtil, LanguageManager } from '@/utils';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import { setMessageInstance } from '@/utils/messageBus';
-import SponsorSlot from '@/components/sponsor/SponsorSlot';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 import { LoginFormSchema, TwoFactorCodeSchema, type LoginFormValues } from '@/schemas/login';
 import './LoginPage.css';
+import { loginWithPasskey, passkeyError, passkeySupported } from '@/lib/clash/passkey';
 
 const HEADLINE_INTERVAL_MS = 2000;
 
@@ -48,6 +48,19 @@ export default function LoginPage() {
 
   const [fetched, setFetched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [passkeySubmitting, setPasskeySubmitting] = useState(false);
+
+  async function onPasskeyLogin() {
+    setPasskeySubmitting(true);
+    try {
+      await loginWithPasskey();
+      window.location.href = basePath + 'panel/';
+    } catch (error) {
+      messageApi.error(passkeyError(error));
+    } finally {
+      setPasskeySubmitting(false);
+    }
+  }
   const [twoFactorEnable, setTwoFactorEnable] = useState(false);
   const [headlineIndex, setHeadlineIndex] = useState(0);
   const methods = useForm<LoginForm>({
@@ -246,6 +259,7 @@ export default function LoginPage() {
                         type="primary"
                         htmlType="submit"
                         loading={submitting}
+                        disabled={passkeySubmitting}
                         size="large"
                         block
                       >
@@ -254,7 +268,11 @@ export default function LoginPage() {
                     </Form.Item>
                   </Form>
                 </FormProvider>
-                <SponsorSlot slot="login" variant="compact" className="login-sponsor" />
+                <Button block size="large" icon={<KeyOutlined aria-hidden />} loading={passkeySubmitting}
+                  disabled={submitting || !passkeySupported()} onClick={onPasskeyLogin}
+                  title={!passkeySupported() ? t('passkey.unsupported') : undefined}>
+                  {t('passkey.login')}
+                </Button>
               </div>
             )}
           </div>

@@ -1,0 +1,7 @@
+.client-lb-tab { display:flex; flex-direction:column; gap:20px; padding:8px 0; }
+.client-lb-tab .ant-table-cell { vertical-align:middle; }
+.client-lb-tab .ant-typography { overflow-wrap:normal; word-break:normal; }
+.client-lb-actions { display:flex; justify-content:flex-end; padding-top:4px; }
+.client-lb-budget-available { white-space:nowrap; }
+.client-lb-budget-cell { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.client-lb-budget-error { font-size:11px; white-space:nowrap; }

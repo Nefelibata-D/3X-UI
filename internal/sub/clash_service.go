@@ -14,6 +14,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
@@ -41,6 +42,22 @@ func (s *SubClashService) GetClashLegacy(subId string, host string) (string, str
 }
 
 func (s *SubClashService) getClash(subId string, host string, legacy bool) (string, string, error) {
+	return s.getClashProject(subId, host, legacy, nil, false)
+}
+
+func (s *SubClashService) ProjectSubscription(subID, host string, binding *clash.SubscriptionBinding) (string, error) {
+	body, _, err := s.getClashProject(subID, host, false, binding, binding == nil)
+	if err == nil && body == "" {
+		if binding == nil {
+			body = "[]"
+		} else {
+			err = errors.New("订阅没有可用的授权节点")
+		}
+	}
+	return body, err
+}
+
+func (s *SubClashService) getClashProject(subId string, host string, legacy bool, binding *clash.SubscriptionBinding, inspect bool) (string, string, error) {
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
@@ -56,6 +73,24 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	}
 
 	var proxies []map[string]any
+	var projectSources []struct {
+		proxy   map[string]any
+		nodeKey string
+	}
+	getProjectProxies := func(inbound *model.Inbound, client model.Client) []map[string]any {
+		items := s.getProxies(subReq, inbound, client, host)
+		key := clash.LocalNodeKey
+		if inbound.NodeID != nil {
+			key = clash.NodeKey(*inbound.NodeID)
+		}
+		for _, item := range items {
+			projectSources = append(projectSources, struct {
+				proxy   map[string]any
+				nodeKey string
+			}{item, key})
+		}
+		return items
+	}
 	var ordered []orderedSubEntry[func() []map[string]any]
 	var hasInactiveExternal bool
 	var hasBoundClosed bool
@@ -90,7 +125,7 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 				variants, closed := subReq.clientHostVariants(inbound, client, "clash")
 				hasBoundClosed = hasBoundClosed || closed
 				for _, variant := range variants {
-					render := func() []map[string]any { return s.getProxies(subReq, variant.inbound(subReq, inbound), client, host) }
+					render := func() []map[string]any { return getProjectProxies(variant.inbound(subReq, inbound), client) }
 					ordered = append(ordered, orderedSubEntry[func() []map[string]any]{variant.order, render})
 				}
 				continue
@@ -106,7 +141,7 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 				injectExternalProxy(&clone, effectiveEps)
 				effective = &clone
 			}
-			proxies = append(proxies, s.getProxies(subReq, effective, client, host)...)
+			proxies = append(proxies, getProjectProxies(effective, client)...)
 		}
 	}
 	if subReq.hostsFirst {
@@ -174,6 +209,57 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	}
 
 	ensureUniqueProxyNames(proxies)
+	nodeKeys := map[string]string{}
+	for _, source := range projectSources {
+		name, _ := source.proxy["name"].(string)
+		nodeKeys[name] = source.nodeKey
+	}
+	if inspect {
+		items := []map[string]any{}
+		for _, p := range proxies {
+			if !isDummyProxy(p) {
+				items = append(items, map[string]any{"name": p["name"], "type": p["type"], "nodeKey": nodeKeys[fmt.Sprint(p["name"])], "config": p})
+			}
+		}
+		body, err := yaml.Marshal(items)
+		return string(body), "", err
+	}
+	if binding != nil {
+		actual := []map[string]any{}
+		for _, p := range proxies {
+			if !isDummyProxy(p) {
+				actual = append(actual, p)
+			}
+		}
+		config, _, err := clash.RenderSubscriptionBinding(*binding, actual, nodeKeys)
+		if err != nil {
+			return "", "", err
+		}
+		if err := validateClashRouteGraph(config); err != nil {
+			return "", "", err
+		}
+		body, err := marshalClashYAML(config)
+		return string(body), "", err
+	}
+	if !legacy {
+		actual := []map[string]any{}
+		for _, p := range proxies {
+			if !isDummyProxy(p) {
+				actual = append(actual, p)
+			}
+		}
+		config, bound, err := clash.RenderSubscription(subId, actual, nodeKeys)
+		if err != nil {
+			return "", "", err
+		}
+		if bound {
+			if err := validateClashRouteGraph(config); err != nil {
+				return "", "", err
+			}
+			data, err := marshalClashYAML(config)
+			return string(data), header, err
+		}
+	}
 
 	proxyNames := make([]string, 0, len(proxies)+1)
 	for _, proxy := range proxies {

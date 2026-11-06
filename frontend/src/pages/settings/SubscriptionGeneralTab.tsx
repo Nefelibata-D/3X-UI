@@ -1,7 +1,5 @@
 import { Alert, Button, Input, InputNumber, Select, Switch, Tabs } from 'antd';
 import {
-  BranchesOutlined,
-  CompassOutlined,
   IdcardOutlined,
   InfoCircleOutlined,
   NodeIndexOutlined,
@@ -9,7 +7,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate } from 'react-router';
 import type { AllSetting } from '@/models/setting';
 import type { SubProfileMode, SubHostSortMode } from '@/schemas/setting';
 import { onNumber } from '@/utils/onNumber';
@@ -18,8 +16,6 @@ import { RemarkTemplateField } from '@/components/form';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import { sanitizePath, normalizePath } from './uriPath';
-import HappSettingsContent from './HappSettingsContent';
-import IncySettingsContent from './IncySettingsContent';
 import { remoteSourceBadge } from './subscriptionShared';
 
 interface SubscriptionGeneralTabProps {
@@ -28,7 +24,6 @@ interface SubscriptionGeneralTabProps {
 }
 
 const PANEL_SETTINGS_TAB = '1';
-const HAPP_SETTINGS_TAB = '5';
 
 export default function SubscriptionGeneralTab({
   allSetting,
@@ -36,15 +31,11 @@ export default function SubscriptionGeneralTab({
 }: SubscriptionGeneralTabProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { isMobile } = useMediaQuery();
-  // Keep the URL semantic while mapping to the legacy numeric key used by these inner tabs.
-  const initialTab =
-    searchParams.get('subscriptionTab') === 'happ' ? HAPP_SETTINGS_TAB : PANEL_SETTINGS_TAB;
 
   return (
     <Tabs
-      defaultActiveKey={initialTab}
+      defaultActiveKey={PANEL_SETTINGS_TAB}
       items={[
         {
           key: '1',
@@ -434,18 +425,6 @@ export default function SubscriptionGeneralTab({
           ),
         },
         {
-          key: '5',
-          label: catTabLabel(<BranchesOutlined aria-hidden />, 'Happ', isMobile),
-          children: (
-            <HappSettingsContent
-              allSetting={allSetting}
-              updateSetting={updateSetting}
-              isMobile={isMobile}
-              remoteSourceBadge={remoteSourceBadge}
-            />
-          ),
-        },
-        {
           key: '6',
           label: catTabLabel(<NodeIndexOutlined aria-hidden />, 'Clash / Mihomo', isMobile),
           children: (
@@ -486,18 +465,6 @@ export default function SubscriptionGeneralTab({
                 />
               </SettingListItem>
             </>
-          ),
-        },
-        {
-          key: '7',
-          label: catTabLabel(<CompassOutlined aria-hidden />, 'Incy', isMobile),
-          children: (
-            <IncySettingsContent
-              allSetting={allSetting}
-              updateSetting={updateSetting}
-              isMobile={isMobile}
-              remoteSourceBadge={remoteSourceBadge}
-            />
           ),
         },
       ]}

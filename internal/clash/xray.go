@@ -13,12 +13,13 @@ import (
 )
 
 type xrayPolicy struct {
-	key  string
-	port int
-	tags []string
+	key   string
+	email string
+	port  int
+	tags  []string
 }
 
-// InjectXrayConfig routes every managed inbound through its policy's local
+// InjectXrayConfig routes each authenticated user through their policy's local
 // gateway before the target dial. It never changes the stored template; the
 // generated config is rebuilt on every Xray start/apply.
 func InjectXrayConfig(cfg *xray.Config) error {
@@ -47,6 +48,7 @@ func InjectXrayConfig(cfg *xray.Config) error {
 		pr.mu.Lock()
 		removing := pr.removing
 		port := pr.port
+		email := pr.clientEmail
 		listening := pr.server != nil
 		tags := make([]string, 0, len(pr.managed))
 		for _, m := range pr.managed {
@@ -61,7 +63,7 @@ func InjectXrayConfig(cfg *xray.Config) error {
 		if !listening || port <= 0 {
 			return fmt.Errorf("clash: gateway unavailable for policy %s", pr.key)
 		}
-		entries = append(entries, xrayPolicy{key: pr.key, port: port, tags: tags})
+		entries = append(entries, xrayPolicy{key: pr.key, email: email, port: port, tags: tags})
 	}
 	if len(entries) == 0 {
 		return nil
@@ -103,17 +105,21 @@ func InjectXrayConfig(cfg *xray.Config) error {
 		return fmt.Errorf("clash: routing rules must be an array")
 	}
 	newRules := make([]any, 0, len(entries))
-	claimed := make(map[string]string, len(liveTags))
+	type routeIdentity struct{ tag, email string }
+	claimed := make(map[routeIdentity]string, len(liveTags))
 	for _, entry := range entries {
+		if entry.email == "" {
+			return fmt.Errorf("clash: policy %s has no authenticated user", entry.key)
+		}
 		filtered := make([]string, 0, len(entry.tags))
 		for _, tag := range entry.tags {
 			if _, ok := liveTags[tag]; !ok {
 				continue
 			}
-			if owner, taken := claimed[tag]; taken && owner != entry.key {
+			if owner, taken := claimed[routeIdentity{tag, entry.email}]; taken && owner != entry.key {
 				return fmt.Errorf("clash: inbound %q has conflicting policies %q and %q", tag, owner, entry.key)
 			}
-			claimed[tag] = entry.key
+			claimed[routeIdentity{tag, entry.email}] = entry.key
 			filtered = append(filtered, tag)
 		}
 		if len(filtered) == 0 {
@@ -136,9 +142,12 @@ func InjectXrayConfig(cfg *xray.Config) error {
 			},
 		})
 		existingOutbound[outboundTag] = struct{}{}
+		// Xray supplies the authenticated account email after UUID validation.
+		// Match both fields so shared inbounds retain independent user quotas.
 		newRules = append(newRules, map[string]any{
 			"type":        "field",
 			"inboundTag":  filtered,
+			"user":        []string{entry.email},
 			"outboundTag": outboundTag,
 		})
 	}
@@ -168,7 +177,7 @@ func gatewayOutboundTag(key string, port int) string {
 	return "clash-gw-" + hex.EncodeToString(sum[:6])
 }
 
-func (rt *Runtime) tagConflict(masterGuid string, clientID int, tags []string) error {
+func (rt *Runtime) tagConflict(masterGuid string, clientID int, email string, tags []string) error {
 	if len(tags) == 0 {
 		return nil
 	}
@@ -184,9 +193,10 @@ func (rt *Runtime) tagConflict(masterGuid string, clientID int, tags []string) e
 		}
 		pr.mu.Lock()
 		removing := pr.removing
+		sameUser := pr.clientEmail == email
 		managed := append([]ManagedInbound(nil), pr.managed...)
 		pr.mu.Unlock()
-		if removing {
+		if removing || !sameUser {
 			continue
 		}
 		for _, m := range managed {
@@ -204,5 +214,5 @@ type ConflictError struct {
 }
 
 func (e *ConflictError) Error() string {
-	return "inbound " + e.Tag + " is already managed by " + e.Owner
+	return "inbound " + e.Tag + " for this user is already managed by " + e.Owner
 }

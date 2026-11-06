@@ -412,6 +412,11 @@
   margin-bottom: 0;
 }
 
+/* Project: separate passkey login from the password form without changing form spacing. */
+.login-card .login-form + .ant-btn {
+  margin-block-start: 16px;
+}
+
 .login-sponsor {
   margin-top: 20px;
 }

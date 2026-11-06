@@ -294,7 +294,7 @@ func (rt *Runtime) Apply(req ApplyRequest) (PolicyReport, error) {
 		}
 	}
 	managed := resolveManaged(cat, req.ClientEmail, previous)
-	if err := rt.tagConflict(req.MasterGuid, req.ClientID, managedTags(managed)); err != nil {
+	if err := rt.tagConflict(req.MasterGuid, req.ClientID, req.ClientEmail, managedTags(managed)); err != nil {
 		return PolicyReport{}, err
 	}
 	if existing == nil {
@@ -417,6 +417,10 @@ func (rt *Runtime) updatePolicyLocked(cat *Catalog, row AppliedPolicy, req Apply
 		}
 	} else {
 		pr.mu.Lock()
+		// The routing identity must refresh even when the inbound tags stay unchanged.
+		if pr.clientEmail != req.ClientEmail {
+			pr.needsApply = true
+		}
 		pr.clientEmail = req.ClientEmail
 		pr.revision = req.Revision
 		pr.ratio = req.EffectiveRatio

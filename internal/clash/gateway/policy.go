@@ -6,7 +6,6 @@ package gateway
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 )
@@ -19,14 +18,10 @@ const (
 	StateDisabled State = "disabled"
 )
 
-const (
-	MaxGraceSeconds       = int64(600)
-	DefaultActivitySecond = int64(300)
-)
+const MaxGraceSeconds = int64(600)
 
 // Config is the enforced budget. Grace settings are frozen when grace starts.
-// ActivitySeconds is the sliding window that decides whether an open site is
-// still active when the grace snapshot is taken.
+// Legacy site/activity fields remain wire-compatible; grace admission is unrestricted.
 type Config struct {
 	ResetSchedule      ResetSchedule
 	AllocationRequired bool
@@ -90,9 +85,7 @@ type Report struct {
 }
 
 type activeConn struct {
-	site         string
-	lastActivity time.Time
-	abort        func()
+	abort func()
 }
 
 type Policy struct {
@@ -104,8 +97,6 @@ type Policy struct {
 	mu        sync.Mutex
 	cfg       Config
 	loc       *time.Location
-	activity  time.Duration
-	sites     *siteGroupIndex
 	state     State
 	usageUp   int64
 	usageDown int64
@@ -116,8 +107,6 @@ type Policy struct {
 	graceDeadline  int64
 	graceExtra     int64
 	graceBaseline  int64
-	graceGroups    []SiteGroup
-	graceSnapshot  map[string]struct{}
 	disabledAt     int64
 	active         map[int64]*activeConn
 	nextID         int64
@@ -141,14 +130,6 @@ func NewPolicy(key string, cfg Config, st PersistedState, store Store, cb Callba
 	if err != nil {
 		return nil, err
 	}
-	groups := cfg.SiteGroups
-	if st.State == StateGrace {
-		groups = st.GraceGroups
-	}
-	sites, err := newSiteGroupIndex(groups)
-	if err != nil {
-		return nil, err
-	}
 	p := &Policy{
 		resetRevision:  st.ResetRevision,
 		key:            key,
@@ -157,8 +138,6 @@ func NewPolicy(key string, cfg Config, st PersistedState, store Store, cb Callba
 		now:            now,
 		cfg:            cfg,
 		loc:            loc,
-		activity:       activityWindow(cfg.ActivitySeconds),
-		sites:          sites,
 		state:          st.State,
 		periodStart:    st.PeriodStart,
 		periodEnd:      st.PeriodEnd,
@@ -166,8 +145,6 @@ func NewPolicy(key string, cfg Config, st PersistedState, store Store, cb Callba
 		graceDeadline:  st.GraceDeadline,
 		graceExtra:     st.GraceExtraBytes,
 		graceBaseline:  st.GraceBaseline,
-		graceGroups:    st.GraceGroups,
-		graceSnapshot:  make(map[string]struct{}, len(st.GraceSnapshot)),
 		disabledAt:     st.DisabledAt,
 		active:         make(map[int64]*activeConn),
 	}
@@ -176,9 +153,6 @@ func NewPolicy(key string, cfg Config, st PersistedState, store Store, cb Callba
 	}
 	p.usageUp = st.UsageUp
 	p.usageDown = st.UsageDown
-	for _, site := range st.GraceSnapshot {
-		p.graceSnapshot[site] = struct{}{}
-	}
 	at := now()
 	p.mu.Lock()
 	if st.PeriodStart != 0 && !sameSchedule(st.ResetSchedule, cfg.ResetSchedule, st.PeriodTimezone, cfg.PeriodTimezone) {
@@ -228,15 +202,7 @@ func ValidateConfig(cfg Config) error {
 	if _, err := loadLocation(cfg.PeriodTimezone); err != nil {
 		return err
 	}
-	_, err := newSiteGroupIndex(cfg.SiteGroups)
-	return err
-}
-
-func activityWindow(seconds int64) time.Duration {
-	if seconds <= 0 {
-		seconds = DefaultActivitySecond
-	}
-	return time.Duration(seconds) * time.Second
+	return validateSiteGroups(cfg.SiteGroups)
 }
 
 func loadLocation(name string) (*time.Location, error) {
@@ -260,20 +226,17 @@ func (p *Policy) usageTotalLocked() int64 {
 	return p.usageUp + p.usageDown
 }
 
-func (p *Policy) admitLocked(host string, at time.Time) (bool, *StateChange, []func()) {
+func (p *Policy) admitLocked(_ string, at time.Time) (bool, *StateChange, []func()) {
 	change, aborts := p.settleLocked(at, false)
 	if p.lastError != "" {
 		if err := p.persistLocked(); err != nil {
 			return false, change, aborts
 		}
 	}
-	site := siteKey(host, p.sites)
+	// Grace restrictions belong to the client; the server only enforces final cutoff.
 	switch p.state {
 	case StateDisabled:
 		return false, change, aborts
-	case StateGrace:
-		_, ok := p.graceSnapshot[site]
-		return ok, change, aborts
 	default:
 		return true, change, aborts
 	}
@@ -306,7 +269,7 @@ func (p *Policy) Track(host string, abort func()) (int64, bool) {
 	}
 	p.nextID++
 	id := p.nextID
-	p.active[id] = &activeConn{site: siteKey(host, p.sites), abort: abort}
+	p.active[id] = &activeConn{abort: abort}
 	p.mu.Unlock()
 	p.afterUnlock(change, aborts)
 	return id, true
@@ -318,9 +281,7 @@ func (p *Policy) Untrack(id int64) {
 	p.mu.Unlock()
 }
 
-// Account records bytes without a connection id; it is used by callers that
-// only exercise the ledger. The data plane uses AccountConn so activity is
-// attributed to the site that carried the bytes.
+// Account and AccountConn share the per-user ledger across all connections.
 func (p *Policy) Account(up, down int64) {
 	p.account(0, up, down)
 }
@@ -329,7 +290,7 @@ func (p *Policy) AccountConn(id, up, down int64) {
 	p.account(id, up, down)
 }
 
-func (p *Policy) account(id, up, down int64) {
+func (p *Policy) account(_ int64, up, down int64) {
 	at := p.now()
 	p.mu.Lock()
 	if p.closed {
@@ -346,9 +307,6 @@ func (p *Policy) account(id, up, down int64) {
 	}
 	if up > 0 || down > 0 {
 		p.dirty = true
-	}
-	if conn := p.active[id]; conn != nil && (up > 0 || down > 0) {
-		conn.lastActivity = at
 	}
 	after := p.usageUp + p.usageDown
 	var change2 *StateChange
@@ -375,11 +333,6 @@ func (p *Policy) Tick() {
 func (p *Policy) Report() Report {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	snapshot := make([]string, 0, len(p.graceSnapshot))
-	for site := range p.graceSnapshot {
-		snapshot = append(snapshot, site)
-	}
-	sort.Strings(snapshot)
 	return Report{
 		State:             p.state,
 		UsageUp:           p.usageUp,
@@ -391,7 +344,6 @@ func (p *Policy) Report() Report {
 		GraceStartedAt:    p.graceStartedAt,
 		GraceDeadline:     p.graceDeadline,
 		GraceBaseline:     p.graceBaseline,
-		GraceSnapshot:     snapshot,
 		ActiveConnections: len(p.active),
 		DisabledAt:        p.disabledAt,
 		LastError:         p.lastError,
@@ -403,10 +355,6 @@ func (p *Policy) ApplyConfig(cfg Config) error {
 		return err
 	}
 	loc, err := loadLocation(cfg.PeriodTimezone)
-	if err != nil {
-		return err
-	}
-	sites, err := newSiteGroupIndex(cfg.SiteGroups)
 	if err != nil {
 		return err
 	}
@@ -424,10 +372,6 @@ func (p *Policy) ApplyConfig(cfg Config) error {
 	}
 	p.cfg = cfg
 	p.loc = loc
-	p.activity = activityWindow(cfg.ActivitySeconds)
-	if p.state != StateGrace {
-		p.sites = sites
-	}
 	change, aborts := p.settleLocked(at, false)
 	if change == nil {
 		change = p.changeLocked(oldState, p.state, at)
@@ -491,9 +435,6 @@ func (p *Policy) ResetRevision(revision int64) error {
 	p.graceDeadline = 0
 	p.graceExtra = 0
 	p.graceBaseline = 0
-	p.graceGroups = nil
-	p.sites, _ = newSiteGroupIndex(p.cfg.SiteGroups)
-	p.graceSnapshot = make(map[string]struct{})
 	p.disabledAt = candidate.DisabledAt
 	p.lastError = ""
 	p.dirty = false
@@ -545,9 +486,6 @@ func (p *Policy) settleLocked(at time.Time, startup bool) (*StateChange, []func(
 		old := p.state
 		p.state = StateNormal
 		p.graceStartedAt, p.graceDeadline, p.graceExtra, p.graceBaseline, p.disabledAt = 0, 0, 0, 0, 0
-		p.graceGroups = nil
-		p.graceSnapshot = make(map[string]struct{})
-		p.sites, _ = newSiteGroupIndex(p.cfg.SiteGroups)
 		_ = p.persistLocked()
 		return p.changeLocked(old, StateNormal, at), nil
 	}
@@ -561,7 +499,11 @@ func (p *Policy) settleLocked(at time.Time, startup bool) (*StateChange, []func(
 			if startup {
 				return p.enterDisabledLocked(at), nil
 			}
-			return p.enterGraceLocked(at)
+			change, aborts := p.enterGraceLocked(at)
+			if p.graceExtra == 0 {
+				return p.enterDisabledLocked(at), p.abortAllLocked()
+			}
+			return change, aborts
 		}
 	}
 	return nil, nil
@@ -574,8 +516,6 @@ func (p *Policy) enterGraceLocked(at time.Time) (*StateChange, []func()) {
 	p.graceDeadline = at.Add(time.Duration(p.cfg.GraceSeconds) * time.Second).Unix()
 	p.graceExtra = graceExtraBytes(p.cfg.BudgetBytes, p.cfg.GracePercent)
 	p.graceBaseline = p.usageTotalLocked()
-	p.graceGroups = append([]SiteGroup(nil), p.cfg.SiteGroups...)
-	p.graceSnapshot = p.activeSitesLocked(at)
 	p.disabledAt = 0
 	_ = p.persistLocked()
 	return p.changeLocked(old, StateGrace, at), nil
@@ -598,9 +538,6 @@ func (p *Policy) resetLocked(at time.Time) {
 	p.graceDeadline = 0
 	p.graceExtra = 0
 	p.graceBaseline = 0
-	p.graceGroups = nil
-	p.sites, _ = newSiteGroupIndex(p.cfg.SiteGroups)
-	p.graceSnapshot = make(map[string]struct{})
 	p.disabledAt = 0
 	p.dirty = true
 }
@@ -610,16 +547,6 @@ func (p *Policy) changeLocked(old, next State, at time.Time) *StateChange {
 		return nil
 	}
 	return &StateChange{Old: old, New: next, At: at}
-}
-
-func (p *Policy) activeSitesLocked(at time.Time) map[string]struct{} {
-	sites := make(map[string]struct{}, len(p.active))
-	for _, conn := range p.active {
-		if !conn.lastActivity.IsZero() && at.Before(conn.lastActivity.Add(p.activity)) {
-			sites[conn.site] = struct{}{}
-		}
-	}
-	return sites
 }
 
 func (p *Policy) abortAllLocked() []func() {
@@ -635,7 +562,6 @@ func (p *Policy) stateLocked() PersistedState {
 	st := PersistedState{
 		ResetSchedule: p.cfg.ResetSchedule, PeriodTimezone: p.cfg.PeriodTimezone,
 		ResetRevision:   p.resetRevision,
-		GraceGroups:     p.graceGroups,
 		State:           p.state,
 		UsageUp:         p.usageUp,
 		UsageDown:       p.usageDown,
@@ -645,13 +571,8 @@ func (p *Policy) stateLocked() PersistedState {
 		GraceDeadline:   p.graceDeadline,
 		GraceExtraBytes: p.graceExtra,
 		GraceBaseline:   p.graceBaseline,
-		GraceSnapshot:   make([]string, 0, len(p.graceSnapshot)),
 		DisabledAt:      p.disabledAt,
 	}
-	for site := range p.graceSnapshot {
-		st.GraceSnapshot = append(st.GraceSnapshot, site)
-	}
-	sort.Strings(st.GraceSnapshot)
 	return st
 }
 

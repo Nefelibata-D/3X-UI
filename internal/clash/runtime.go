@@ -16,8 +16,7 @@ import (
 )
 
 type Hooks struct {
-	// SetInboundEnabled flips one official local inbound through the upstream
-	// service, so the panel keeps ownership of the inbound row and Xray config.
+	// SetInboundEnabled only restores inbounds disabled by older gateway versions.
 	SetInboundEnabled func(tag string, enabled bool) error
 	// ApplyXray reconciles the running Xray config after routing/inbound
 	// changes. It is the upstream XrayService.RestartXray(false) path.
@@ -407,56 +406,23 @@ func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply,
 	previous := append([]ManagedInbound(nil), pr.managed...)
 	pr.mu.Unlock()
 
-	report := pr.policy.Report()
 	current := resolveManaged(cat, clientEmail, previous)
 	orphaned := orphanedManaged(previous, current)
-	expectDisabled := report.State == gateway.StateDisabled || !listening
 
 	var applyErr []string
 	if !listening {
 		applyErr = append(applyErr, "gateway is not listening")
 	}
-	if err := rt.tagConflict(pr.masterGuid, pr.clientID, managedTags(current)); err != nil {
+	if err := rt.tagConflict(pr.masterGuid, pr.clientID, clientEmail, managedTags(current)); err != nil {
 		applyErr = append(applyErr, err.Error())
 	}
 
 	changed := false
-	var disable, enable []int
-	flagsChanged := false
+	// Restore only legacy gateway-owned disables; quota enforcement never changes inbounds.
 	for i := range current {
-		m := &current[i]
-		if expectDisabled {
-			if m.Enabled {
-				m.Enabled = false
-				m.DisabledByGateway = true
-				flagsChanged = true
-				disable = append(disable, i)
-			}
-		} else if m.DisabledByGateway {
-			enable = append(enable, i)
-		}
-	}
-
-	// Persist ownership before the side effect: a crash after stopping the
-	// inbound must leave enough state to re-enable or retry it safely.
-	if flagsChanged {
-		if err := UpdateAppliedInbounds(pr.rowID, current, false, ""); err != nil {
-			applyErr = append(applyErr, "persist disabled-by-gateway: "+err.Error())
-			for _, i := range disable {
-				current[i].Enabled = true
-				current[i].DisabledByGateway = false
-			}
-			disable = nil
-		}
-	}
-	for _, i := range disable {
-		if err := rt.setInbound(current[i].Tag, false); err != nil {
-			applyErr = append(applyErr, fmt.Sprintf("%s: %v", current[i].Tag, err))
+		if !current[i].DisabledByGateway {
 			continue
 		}
-		changed = true
-	}
-	for _, i := range enable {
 		if err := rt.setInbound(current[i].Tag, true); err != nil {
 			applyErr = append(applyErr, fmt.Sprintf("%s: %v", current[i].Tag, err))
 			continue
@@ -502,9 +468,9 @@ func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply,
 
 	if probe {
 		for i := range current {
-			current[i].PortCheck, current[i].PortError = probeInbound(current[i], expectDisabled)
+			current[i].PortCheck, current[i].PortError = probeInbound(current[i], false)
 			expected := "open"
-			if expectDisabled {
+			if !current[i].Enabled {
 				expected = "closed"
 			}
 			if current[i].PortCheck != expected {

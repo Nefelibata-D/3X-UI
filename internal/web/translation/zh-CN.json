@@ -131,6 +131,8 @@
     "saveQr": "保存二维码"
   },
   "menu": {
+    "loadBalancing": "负载均衡",
+    "clashSubscriptions": "Clash 订阅",
     "theme": "主题",
     "dashboard": "系统状态",
     "inbounds": "入站",

@@ -52,9 +52,21 @@
   outline: 1px solid var(--ant-color-primary-border);
 }
 
-.yaml-editor-host .yaml-rule-type { color: #994cc3 !important; }
-.yaml-editor-host .yaml-rule-match { color: #4876d6 !important; }
-.yaml-editor-host .yaml-rule-policy { color: #bc5454 !important; }
-.yaml-editor-host .vs-dark .yaml-rule-type { color: #c792ea !important; }
-.yaml-editor-host .vs-dark .yaml-rule-match { color: #ecc48d !important; }
-.yaml-editor-host .vs-dark .yaml-rule-policy { color: #7fdbca !important; }
+.yaml-editor-host .yaml-rule-type {
+  color: #994cc3 !important;
+}
+.yaml-editor-host .yaml-rule-match {
+  color: #4876d6 !important;
+}
+.yaml-editor-host .yaml-rule-policy {
+  color: #bc5454 !important;
+}
+.yaml-editor-host .vs-dark .yaml-rule-type {
+  color: #c792ea !important;
+}
+.yaml-editor-host .vs-dark .yaml-rule-match {
+  color: #ecc48d !important;
+}
+.yaml-editor-host .vs-dark .yaml-rule-policy {
+  color: #7fdbca !important;
+}

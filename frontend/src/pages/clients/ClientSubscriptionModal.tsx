@@ -1,6 +1,11 @@
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import {
+  useClashSubscription,
+  useSaveClashSubscription,
+} from '@/api/queries/useClashSubscriptions';
+import { validateSubscription } from '@/lib/clash/subscription/api';
+import type { Template, RuleSet, SubscriptionProxy } from '@/schemas/clash/subscription';
 import {
   Alert,
   message,
@@ -14,89 +19,37 @@ import {
   Tag,
   Typography,
   Form,
-} from "antd";
-import {
-  CheckOutlined,
-  CopyOutlined,
-  StopOutlined,
-  UndoOutlined,
-} from "@ant-design/icons";
-import { stringify } from "yaml";
-import { z } from "zod";
-import { HttpUtil } from "@/utils";
-import { fetchClashClientRatio } from "@/lib/clash/api";
-import type { ClientRecord } from "@/hooks/useClients";
-import TemplateInsert from "../clash-subscriptions/TemplateInsert";
-import NodeGroups from "../clash-subscriptions/NodeGroups";
-import TemplateWorkspace from "../clash-subscriptions/TemplateWorkspace";
-import LoadBalance from "../clash-subscriptions/LoadBalance";
-import { deleteSubscriptionGroup } from "../clash-subscriptions/subscriptionDeletion";
-import { validateTemplate } from "../clash-subscriptions/templateValidation";
+} from 'antd';
+import { CheckOutlined, CopyOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons';
+import { stringify } from 'yaml';
+import type { ClientRecord } from '@/hooks/useClients';
+import TemplateInsert from '@/components/clash/subscription/TemplateInsert';
+import NodeGroups from '@/components/clash/subscription/NodeGroups';
+import TemplateWorkspace from '@/components/clash/subscription/TemplateWorkspace';
+import LoadBalance from '@/components/clash/subscription/LoadBalance';
+import { deleteSubscriptionGroup } from '@/lib/clash/subscription/subscriptionDeletion';
+import { validateTemplate } from '@/lib/clash/subscription/templateValidation';
 import {
   composeSubscription,
   disabledField,
   documentObject,
-  emptySubscription,
   entries,
   setEntries,
   ruleIdentity,
-  subscriptionSchema,
   subscriptionFromYAML,
-  subscriptionTemplateSchema,
   type Section,
-  type Subscription,
-} from "../clash-subscriptions/subscriptionModel";
-import "../clash-subscriptions/Templates.css";
-import "./ClientSubscriptionModal.css";
+} from '@/lib/clash/subscription/subscriptionModel';
+import { emptySubscription, type Subscription } from '@/schemas/clash/subscription';
+import '@/components/clash/subscription/Templates.css';
+import './ClientSubscriptionModal.css';
 
 interface Props {
   client: ClientRecord;
   subscriptionURL?: string;
   onClose: () => void;
 }
-async function get(path: string) {
-  const response = await HttpUtil.get(path, undefined, { silent: true });
-  if (!response.success) throw new Error(response.msg);
-  return response.obj;
-}
-const ruleSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  code: z.string(),
-  filename: z.string(),
-  routing: z.boolean(),
-  blacklist: z.boolean(),
-});
-
 export default function ClientSubscriptionModal(props: Props) {
-  const query = useQuery({
-    queryKey: ["clash", "subscription", props.client.id],
-    queryFn: async () => {
-      if (!props.client.id) throw new Error("客户端没有有效 ID");
-      const [binding, templates, nodes, rules, proxies] = await Promise.all([
-        get(`/panel/api/clash/clients/${props.client.id}/subscription`),
-        get("/panel/api/clash/templates"),
-        fetchClashClientRatio(props.client.id),
-        get("/panel/api/clash/rulesets"),
-        get(`/panel/api/clash/clients/${props.client.id}/subscription/proxies`),
-      ]);
-      return {
-        proxies: z
-          .array(
-            z.object({
-              name: z.string(),
-              type: z.string(),
-              nodeKey: z.string(), config: z.record(z.string(), z.unknown()),
-            }),
-          )
-          .parse(proxies),
-        binding: subscriptionSchema.parse(binding),
-        templates: subscriptionTemplateSchema.array().parse(templates ?? []),
-        nodes: nodes.nodes.filter((node) => node.selectable),
-        rules: ruleSchema.array().parse(rules ?? []),
-      };
-    },
-  });
+  const query = useClashSubscription(props.client.id);
   return (
     <Modal
       open
@@ -121,11 +74,11 @@ function SubscriptionEditor({
   data,
 }: Props & {
   data: {
-    proxies: { name: string; type: string; nodeKey: string; config: Record<string, unknown> }[];
+    proxies: SubscriptionProxy[];
     binding: Subscription;
-    templates: z.infer<typeof subscriptionTemplateSchema>[];
+    templates: Template[];
     nodes: { nodeKey: string; name: string }[];
-    rules: z.infer<typeof ruleSchema>[];
+    rules: RuleSet[];
   };
 }) {
   const form = useForm<Subscription>({ defaultValues: data.binding });
@@ -133,40 +86,40 @@ function SubscriptionEditor({
   const draft = useWatch({ control: form.control }) as Subscription;
   const [saving, setSaving] = useState(false);
   const [chainValid, setChainValid] = useState(true);
-  const [activeTab, setActiveTab] = useState("subscription");
-  const [source, setSource] = useState<"template" | "custom">("template");
+  const [activeTab, setActiveTab] = useState('subscription');
+  const [source, setSource] = useState<'template' | 'custom'>('template');
   const [yamlDraft, setYamlDraft] = useState<string>();
-  const [yamlError, setYamlError] = useState("");
+  const [yamlError, setYamlError] = useState('');
   const changeBinding: typeof form.setValue = (...args) => {
     setYamlDraft(undefined);
-    setYamlError("");
+    setYamlError('');
     form.setValue(...args);
   };
-  const [error, setError] = useState("");
-  const cache = useQueryClient();
+  const [error, setError] = useState('');
+  const saveMutation = useSaveClashSubscription(client.id);
   const template = data.templates.find((item) => item.id === draft.templateId);
   const overlay = documentObject(draft.content);
-  const base = documentObject(template?.content ?? "{}");
-  let composed = "{}",
-    compositionError = "";
+  const base = documentObject(template?.content ?? '{}');
+  let composed = '{}',
+    compositionError = '';
   try {
-    composed = composeSubscription(template?.content ?? "{}", draft);
+    composed = composeSubscription(template?.content ?? '{}', draft);
   } catch (e) {
     compositionError = String(e);
   }
   const combined = documentObject(composed);
-  const groupRows = entries(combined, "proxy-groups").map(([name, value]) => ({
+  const groupRows = entries(combined, 'proxy-groups').map(([name, value]) => ({
     name,
     type: String((value as Record<string, unknown>).type),
   }));
   const injectedMembers = Object.fromEntries(
     groupRows.map((group) => {
       const injection = draft.groups.find((item) => item.group === group.name);
-      const original = entries(combined, "proxy-groups").find(
+      const original = entries(combined, 'proxy-groups').find(
         ([name]) => name === group.name,
       )?.[1] as Record<string, unknown>;
       const members = Array.isArray(original.proxies)
-        ? original.proxies.filter((v): v is string => typeof v === "string")
+        ? original.proxies.filter((v): v is string => typeof v === 'string')
         : [];
       return [
         group.name,
@@ -174,19 +127,19 @@ function SubscriptionEditor({
           ...new Set([
             ...members,
             ...data.proxies
-              .filter(
-                (p) =>
-                  injection?.allNodes || injection?.nodes.includes(p.nodeKey),
-              )
+              .filter((p) => injection?.allNodes || injection?.nodes.includes(p.nodeKey))
               .map((p) => p.name),
           ]),
         ],
       ];
     }),
   );
-  const selectedProxies = data.proxies.filter((p) =>
-    draft.groups.some((g) => g.allNodes || g.nodes.includes(p.nodeKey)) ||
-    Object.entries(draft.dialers).some(([source, target]) => !!target && (source === p.name || target === p.name)),
+  const selectedProxies = data.proxies.filter(
+    (p) =>
+      draft.groups.some((g) => g.allNodes || g.nodes.includes(p.nodeKey)) ||
+      Object.entries(draft.dialers).some(
+        ([source, target]) => !!target && (source === p.name || target === p.name),
+      ),
   );
   const generatedProxies = selectedProxies.map((p) => ({
     ...p.config,
@@ -206,23 +159,22 @@ function SubscriptionEditor({
     ...combined,
     proxies: previewProxies,
     'proxy-groups': entries(combined, 'proxy-groups').map(([name, value]) => ({
-      ...(value as Record<string, unknown>), proxies: injectedMembers[name],
+      ...(value as Record<string, unknown>),
+      proxies: injectedMembers[name],
     })),
   });
   const chainContent = stringify({
     ...combined,
     proxies: previewProxies,
-    "proxy-groups": entries(combined, "proxy-groups").map(([name, value]) => ({
+    'proxy-groups': entries(combined, 'proxy-groups').map(([name, value]) => ({
       ...(value as Record<string, unknown>),
       proxies: injectedMembers[name],
     })),
   });
-  const customGroups = entries(overlay, "proxy-groups").map(
-    ([name, value]) => ({
-      name,
-      type: String((value as Record<string, unknown>).type),
-    }),
-  );
+  const customGroups = entries(overlay, 'proxy-groups').map(([name, value]) => ({
+    name,
+    type: String((value as Record<string, unknown>).type),
+  }));
 
   function changeSection(section: Section, content: string) {
     try {
@@ -240,8 +192,8 @@ function SubscriptionEditor({
         draft[field].filter((id) => !restored.has(id)),
         { shouldDirty: true },
       );
-      changeBinding("content", stringify(next), { shouldDirty: true });
-      setError("");
+      changeBinding('content', stringify(next), { shouldDirty: true });
+      setError('');
     } catch (e) {
       setError(String(e));
     }
@@ -249,16 +201,12 @@ function SubscriptionEditor({
   function removeGroup(name: string) {
     try {
       const current = form.getValues();
-      const result = deleteSubscriptionGroup(
-        template?.content ?? "{}",
-        current,
-        name,
-      );
+      const result = deleteSubscriptionGroup(template?.content ?? '{}', current, name);
       const apply = () => {
         if (JSON.stringify(form.getValues()) !== JSON.stringify(current))
-          throw new Error("配置已变更，请重新执行删除");
+          throw new Error('配置已变更，请重新执行删除');
         setYamlDraft(undefined);
-        setYamlError("");
+        setYamlError('');
         form.reset(result.binding);
       };
       if (result.restored || !result.references.length) {
@@ -269,14 +217,12 @@ function SubscriptionEditor({
         title: `删除节点组「${name}」及其引用？`,
         content: (
           <div>
-            <p>
-              以下引用将一并删除，不会改为直连。其他节点组若因此为空，需要重新配置成员。
-            </p>
+            <p>以下引用将一并删除，不会改为直连。其他节点组若因此为空，需要重新配置成员。</p>
             <ul
               style={{
-                maxHeight: "40vh",
-                overflowY: "auto",
-                overflowWrap: "anywhere",
+                maxHeight: '40vh',
+                overflowY: 'auto',
+                overflowWrap: 'anywhere',
               }}
             >
               {result.references.map((reference, index) => (
@@ -285,8 +231,8 @@ function SubscriptionEditor({
             </ul>
           </div>
         ),
-        okText: "删除节点组及引用",
-        cancelText: "取消",
+        okText: '删除节点组及引用',
+        cancelText: '取消',
         okButtonProps: { danger: true },
         onOk: apply,
       });
@@ -296,26 +242,28 @@ function SubscriptionEditor({
   }
   function inherit(section: Section, balance = false) {
     const rows = entries(base, section).filter(
-      ([, value]) =>
-        !balance || (value as Record<string, unknown>).type === "load-balance",
+      ([, value]) => !balance || (value as Record<string, unknown>).type === 'load-balance',
     );
     const custom = new Set(entries(overlay, section).map(([id]) => id));
     const field = disabledField[section];
-    const identity = (name: string) =>
-      section === "rules" ? ruleIdentity(name) : name;
+    const identity = (name: string) => (section === 'rules' ? ruleIdentity(name) : name);
     const entryClassName = (name: string) =>
-      "subscription-inherited-item " +
+      'subscription-inherited-item ' +
       (custom.has(identity(name))
-        ? "subscription-inherited-overridden"
+        ? 'subscription-inherited-overridden'
         : draft[field].includes(identity(name))
-          ? "subscription-inherited-disabled"
-          : "");
+          ? 'subscription-inherited-disabled'
+          : '');
     const toggleBalance = (name: string) => {
-      const current = entries(combined, 'proxy-groups').find(([id]) => id === name)?.[1] as Record<string, unknown> | undefined;
+      const current = entries(combined, 'proxy-groups').find(([id]) => id === name)?.[1] as
+        | Record<string, unknown>
+        | undefined;
       const inherited = rows.find(([id]) => id === name)?.[1] as Record<string, unknown>;
       const enabled = current?.type === 'load-balance';
       const group = { ...(current ?? inherited) };
-      const blacklists = Array.isArray(combined['site-blacklist']) ? combined['site-blacklist'] as Record<string, unknown>[] : [];
+      const blacklists = Array.isArray(combined['site-blacklist'])
+        ? (combined['site-blacklist'] as Record<string, unknown>[])
+        : [];
       let nextRules = blacklists.filter((entry) => entry.group !== name);
       if (enabled || !current) {
         group.type = 'select';
@@ -323,16 +271,24 @@ function SubscriptionEditor({
         delete group['weighted-sticky'];
       } else {
         group.type = 'load-balance';
-        for (const field of ['strategy', 'weighted-sticky']) if (field in inherited) group[field] = inherited[field];
-        const originalRules = Array.isArray(base['site-blacklist']) ? base['site-blacklist'] as Record<string, unknown>[] : [];
+        for (const field of ['strategy', 'weighted-sticky'])
+          if (field in inherited) group[field] = inherited[field];
+        const originalRules = Array.isArray(base['site-blacklist'])
+          ? (base['site-blacklist'] as Record<string, unknown>[])
+          : [];
         nextRules = [...nextRules, ...originalRules.filter((entry) => entry.group === name)];
       }
       const next = setEntries(overlay, 'proxy-groups', [
-        ...entries(overlay, 'proxy-groups').filter(([id]) => id !== name), [name, group],
+        ...entries(overlay, 'proxy-groups').filter(([id]) => id !== name),
+        [name, group],
       ]);
       next['site-blacklist'] = nextRules;
       changeBinding('content', stringify(next), { shouldDirty: true });
-      changeBinding('disabledGroups', draft.disabledGroups.filter((id) => id !== name), { shouldDirty: true });
+      changeBinding(
+        'disabledGroups',
+        draft.disabledGroups.filter((id) => id !== name),
+        { shouldDirty: true },
+      );
       setError('');
     };
     const entryActions = (name: string) => {
@@ -341,38 +297,49 @@ function SubscriptionEditor({
         overridden = custom.has(id);
       return (
         <Space size={0} className="subscription-entry-actions">
-          {balance ? <Button
-            size="small" type="text"
-            aria-label={(entries(combined, 'proxy-groups').find(([key]) => key === id)?.[1] as Record<string, unknown> | undefined)?.type === 'load-balance' ? '关闭负载均衡' : '开启负载均衡'}
-            title="切换负载均衡，保留节点组"
-            icon={<StopOutlined aria-hidden />}
-            onClick={() => toggleBalance(id)}
-          /> : <Button
-            size="small"
-            type="text"
-            danger={!disabled && !overridden}
-            disabled={overridden}
-            title={overridden ? "已覆盖" : disabled ? "恢复继承" : "禁用"}
-            aria-label={overridden ? "已覆盖" : disabled ? "恢复继承" : "禁用"}
-            icon={
-              overridden ? (
-                <CheckOutlined aria-hidden />
-              ) : disabled ? (
-                <UndoOutlined aria-hidden />
-              ) : (
-                <StopOutlined aria-hidden />
-              )
-            }
-            onClick={() =>
-              changeBinding(
-                field,
-                disabled
-                  ? draft[field].filter((key) => key !== id)
-                  : [...draft[field], id],
-                { shouldDirty: true },
-              )
-            }
-          />}
+          {balance ? (
+            <Button
+              size="small"
+              type="text"
+              aria-label={
+                (
+                  entries(combined, 'proxy-groups').find(([key]) => key === id)?.[1] as
+                    | Record<string, unknown>
+                    | undefined
+                )?.type === 'load-balance'
+                  ? '关闭负载均衡'
+                  : '开启负载均衡'
+              }
+              title="切换负载均衡，保留节点组"
+              icon={<StopOutlined aria-hidden />}
+              onClick={() => toggleBalance(id)}
+            />
+          ) : (
+            <Button
+              size="small"
+              type="text"
+              danger={!disabled && !overridden}
+              disabled={overridden}
+              title={overridden ? '已覆盖' : disabled ? '恢复继承' : '禁用'}
+              aria-label={overridden ? '已覆盖' : disabled ? '恢复继承' : '禁用'}
+              icon={
+                overridden ? (
+                  <CheckOutlined aria-hidden />
+                ) : disabled ? (
+                  <UndoOutlined aria-hidden />
+                ) : (
+                  <StopOutlined aria-hidden />
+                )
+              }
+              onClick={() =>
+                changeBinding(
+                  field,
+                  disabled ? draft[field].filter((key) => key !== id) : [...draft[field], id],
+                  { shouldDirty: true },
+                )
+              }
+            />
+          )}
           <Button
             size="small"
             type="text"
@@ -381,15 +348,12 @@ function SubscriptionEditor({
             aria-label="覆盖"
             disabled={overridden}
             onClick={() => {
-              setSource("custom");
+              setSource('custom');
               const value = rows.find(([key]) => key === id)?.[1];
               changeBinding(
-                "content",
+                'content',
                 stringify(
-                  setEntries(overlay, section, [
-                    ...entries(overlay, section),
-                    [id, value],
-                  ]),
+                  setEntries(overlay, section, [...entries(overlay, section), [id, value]]),
                 ),
                 { shouldDirty: true },
               );
@@ -405,7 +369,7 @@ function SubscriptionEditor({
       entryActions,
       entryClassName,
     };
-    return section === "proxy-groups" ? (
+    return section === 'proxy-groups' ? (
       balance ? (
         <LoadBalance {...common} rules={data.rules} onChange={() => {}} />
       ) : (
@@ -423,7 +387,7 @@ function SubscriptionEditor({
     ) : (
       <TemplateInsert
         {...common}
-        tab={section === "rules" ? "routes" : "providers"}
+        tab={section === 'rules' ? 'routes' : 'providers'}
         groups={groupRows.map((g) => g.name)}
         rules={data.rules}
         onChange={() => {}}
@@ -431,18 +395,18 @@ function SubscriptionEditor({
     );
   }
 
-  function routeEditor(section: "rules" | "rule-providers") {
-    if (source === "template") return inherit(section);
+  function routeEditor(section: 'rules' | 'rule-providers') {
+    if (source === 'template') return inherit(section);
     const context = {
       ...combined,
-      [section]: overlay[section] ?? (section === "rules" ? [] : {}),
+      [section]: overlay[section] ?? (section === 'rules' ? [] : {}),
     };
     return (
       <>
         <TemplateInsert
           content={stringify(context)}
           onChange={(value) => changeSection(section, value)}
-          tab={section === "rules" ? "routes" : "providers"}
+          tab={section === 'rules' ? 'routes' : 'providers'}
           groups={groupRows.map((g) => g.name)}
           rules={data.rules}
           readonly={false}
@@ -452,51 +416,36 @@ function SubscriptionEditor({
   }
   async function check() {
     if (!draft.templateId) {
-      void message.success("使用官方默认订阅");
+      void message.success('使用官方默认订阅');
       return;
     }
     try {
-      if (!chainValid) throw Error("请先修复链式代理配置");
-      const response = await HttpUtil.post(
-        `/panel/api/clash/clients/${client.id}/subscription/validate`,
-        subscriptionSchema.parse(draft),
-        { silent: true, headers: { "Content-Type": "application/json" } },
-      );
-      if (!response.success) throw Error(response.msg);
-      setError("");
-      void message.success("订阅配置校验通过");
+      if (!chainValid) throw Error('请先修复链式代理配置');
+      await validateSubscription(client.id, draft);
+      setError('');
+      void message.success('订阅配置校验通过');
     } catch (e) {
       setError(String(e));
     }
   }
   async function save() {
     setSaving(true);
-    setError("");
+    setError('');
     try {
       if (yamlError) throw new Error(yamlError);
-      if (!chainValid) throw new Error("请先修复链式代理配置");
+      if (!chainValid) throw new Error('请先修复链式代理配置');
       if (draft.templateId) {
-        if (!template) throw new Error("请选择有效模板");
+        if (!template) throw new Error('请选择有效模板');
         if (compositionError) throw new Error(compositionError);
         const report = validateTemplate(composed);
-        if (report.errors.length) throw new Error(report.errors.join("\n"));
+        if (report.errors.length) throw new Error(report.errors.join('\n'));
         const missing = report.pending.filter(
-          (name) =>
-            !draft.groups.some(
-              (g) => g.group === name && (g.allNodes || g.nodes.length),
-            ),
+          (name) => !draft.groups.some((g) => g.group === name && (g.allNodes || g.nodes.length)),
         );
-        if (missing.length)
-          throw new Error("请为节点组配置注入：" + missing.join("、"));
+        if (missing.length) throw new Error('请为节点组配置注入：' + missing.join('、'));
       }
-      const response = await HttpUtil.post(
-        `/panel/api/clash/clients/${client.id}/subscription`,
-        subscriptionSchema.parse(draft),
-        { silent: true, headers: { "Content-Type": "application/json" } },
-      );
-      if (!response.success) throw new Error(response.msg);
-      await cache.invalidateQueries({ queryKey: ["clash", "subscription"] });
-      void message.success("订阅配置已保存");
+      await saveMutation.mutateAsync(draft);
+      void message.success('订阅配置已保存');
       onClose();
     } catch (e) {
       setError(String(e));
@@ -505,12 +454,12 @@ function SubscriptionEditor({
     }
   }
   const formatTime = (value: string | number) =>
-    new Date(value).toLocaleString("zh-CN", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
+    new Date(value).toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
       hour12: false,
     });
   const settings = (
@@ -520,7 +469,7 @@ function SubscriptionEditor({
           aria-label="选择订阅模板"
           value={draft.templateId}
           options={[
-            { value: 0, label: "官方默认订阅" },
+            { value: 0, label: '官方默认订阅' },
             ...data.templates.map((item) => ({
               value: item.id,
               label: item.name,
@@ -528,8 +477,8 @@ function SubscriptionEditor({
           ]}
           onChange={(templateId) => {
             setYamlDraft(undefined);
-            setYamlError("");
-            setSource("template");
+            setYamlError('');
+            setSource('template');
             form.reset({ ...emptySubscription, templateId });
           }}
         />
@@ -543,23 +492,25 @@ function SubscriptionEditor({
             {subscriptionURL}
           </Typography.Paragraph>
         ) : (
-          <Typography.Text type="secondary">
-            尚未启用 Clash 订阅地址
-          </Typography.Text>
+          <Typography.Text type="secondary">尚未启用 Clash 订阅地址</Typography.Text>
         )}
       </Form.Item>
       <Form.Item label="更新时间">
         <Tag className="subscription-time-tag">
-          {data.binding.updatedAt
-            ? formatTime(data.binding.updatedAt)
-            : "尚未保存"}
+          {data.binding.updatedAt ? formatTime(data.binding.updatedAt) : '尚未保存'}
         </Tag>
       </Form.Item>
-      <Form.Item label={<span>客户端<br />同步时间</span>}>
+      <Form.Item
+        label={
+          <span>
+            客户端
+            <br />
+            同步时间
+          </span>
+        }
+      >
         <Tag className="subscription-time-tag">
-          {data.binding.lastSyncAt
-            ? formatTime(data.binding.lastSyncAt)
-            : "尚未同步"}
+          {data.binding.lastSyncAt ? formatTime(data.binding.lastSyncAt) : '尚未同步'}
         </Tag>
       </Form.Item>
     </Form>
@@ -580,21 +531,28 @@ function SubscriptionEditor({
             else delete edited.proxies;
             for (const [name, value] of entries(edited, 'proxy-groups')) {
               const group = value as Record<string, unknown>;
-              const original = entries(combined, 'proxy-groups').find(([id]) => id === name)?.[1] as Record<string, unknown> | undefined;
+              const original = entries(combined, 'proxy-groups').find(
+                ([id]) => id === name,
+              )?.[1] as Record<string, unknown> | undefined;
               const explicit = Array.isArray(original?.proxies) ? original.proxies : [];
-              const generated = (injectedMembers[name] ?? []).filter((member) => !explicit.includes(member));
-              if (generated.length && (!Array.isArray(group.proxies) || generated.some((member) => !(group.proxies as unknown[]).includes(member))))
+              const generated = (injectedMembers[name] ?? []).filter(
+                (member) => !explicit.includes(member),
+              );
+              if (
+                generated.length &&
+                (!Array.isArray(group.proxies) ||
+                  generated.some((member) => !(group.proxies as unknown[]).includes(member)))
+              )
                 throw new Error('已分配节点由节点组选择生成，请在右侧节点编辑中调整');
-              if (Array.isArray(group.proxies)) group.proxies = group.proxies.filter((member) => !generated.includes(String(member)));
+              if (Array.isArray(group.proxies))
+                group.proxies = group.proxies.filter(
+                  (member) => !generated.includes(String(member)),
+                );
             }
-            const next = subscriptionFromYAML(
-              template?.content ?? "{}",
-              stringify(edited),
-              draft,
-            );
+            const next = subscriptionFromYAML(template?.content ?? '{}', stringify(edited), draft);
 
             form.reset(next);
-            setYamlError("");
+            setYamlError('');
           } catch (e) {
             setYamlError(String(e));
           }
@@ -607,19 +565,19 @@ function SubscriptionEditor({
           activeKey={activeTab}
           onChange={setActiveTab}
           items={[
-            { key: "subscription", label: "订阅设置", children: settings },
+            { key: 'subscription', label: '订阅设置', children: settings },
             {
-              key: "groups",
-              label: "节点",
+              key: 'groups',
+              label: '节点',
               disabled: !template,
               children:
-                source === "template" ? (
-                  inherit("proxy-groups")
+                source === 'template' ? (
+                  inherit('proxy-groups')
                 ) : (
                   <>
                     <NodeGroups
                       content={draft.content}
-                      entryClassName={() => "subscription-node-card"}
+                      entryClassName={() => 'subscription-node-card'}
                       onRemove={removeGroup}
                       groups={customGroups}
                       bindings={draft.groups}
@@ -627,8 +585,8 @@ function SubscriptionEditor({
                       readonly={false}
                       invalid={!!compositionError}
                       change={(content, bindings) => {
-                        changeSection("proxy-groups", content);
-                        changeBinding("groups", bindings, {
+                        changeSection('proxy-groups', content);
+                        changeBinding('groups', bindings, {
                           shouldDirty: true,
                         });
                       }}
@@ -637,24 +595,24 @@ function SubscriptionEditor({
                 ),
             },
             {
-              key: "providers",
-              label: "规则集",
+              key: 'providers',
+              label: '规则集',
               disabled: !template,
-              children: routeEditor("rule-providers"),
+              children: routeEditor('rule-providers'),
             },
             {
-              key: "routes",
-              label: "路由",
+              key: 'routes',
+              label: '路由',
               disabled: !template,
-              children: routeEditor("rules"),
+              children: routeEditor('rules'),
             },
             {
-              key: "load-balance",
-              label: "负载均衡",
+              key: 'load-balance',
+              label: '负载均衡',
               disabled: !template,
               children:
-                source === "template" ? (
-                  inherit("proxy-groups", true)
+                source === 'template' ? (
+                  inherit('proxy-groups', true)
                 ) : (
                   <>
                     <LoadBalance
@@ -665,11 +623,11 @@ function SubscriptionEditor({
                       rules={data.rules}
                       onChange={(content) => {
                         const next = subscriptionFromYAML(
-                          template?.content ?? "{}",
+                          template?.content ?? '{}',
                           content,
                           draft,
                         );
-                        changeBinding("content", next.content, {
+                        changeBinding('content', next.content, {
                           shouldDirty: true,
                         });
                       }}
@@ -678,8 +636,8 @@ function SubscriptionEditor({
                 ),
             },
             {
-              key: "dialer",
-              label: "链式代理",
+              key: 'dialer',
+              label: '链式代理',
               disabled: !template,
               children: (
                 <TemplateInsert
@@ -691,21 +649,22 @@ function SubscriptionEditor({
                   onValidityChange={setChainValid}
                   onChange={(content) => {
                     const updated = documentObject(content);
-                    const proxies = updated.proxies as Record<
-                      string,
-                      unknown
-                    >[];
+                    const proxies = updated.proxies as Record<string, unknown>[];
                     changeBinding(
-                      "dialers",
+                      'dialers',
                       Object.fromEntries(
                         proxies
-                          .filter((p) => typeof p["dialer-proxy"] === "string" ||
-                            Object.hasOwn(draft.dialers, String(p.name)) ||
-                            previewProxies.some((original) => original.name === p.name && typeof original['dialer-proxy'] === 'string'))
-                          .map((p) => [
-                            String(p.name),
-                            String(p["dialer-proxy"] ?? ""),
-                          ]),
+                          .filter(
+                            (p) =>
+                              typeof p['dialer-proxy'] === 'string' ||
+                              Object.hasOwn(draft.dialers, String(p.name)) ||
+                              previewProxies.some(
+                                (original) =>
+                                  original.name === p.name &&
+                                  typeof original['dialer-proxy'] === 'string',
+                              ),
+                          )
+                          .map((p) => [String(p.name), String(p['dialer-proxy'] ?? '')]),
                       ),
                       { shouldDirty: true },
                     );
@@ -715,23 +674,20 @@ function SubscriptionEditor({
             },
           ]}
         />
-        {template &&
-          ["groups", "providers", "routes", "load-balance"].includes(
-            activeTab,
-          ) && (
-            <div className="subscription-source-toggle">
-              <Segmented<"template" | "custom">
-                size="small"
-                aria-label="配置来源"
-                value={source}
-                onChange={setSource}
-                options={[
-                  { label: "模板", value: "template" },
-                  { label: "自定义", value: "custom" },
-                ]}
-              />
-            </div>
-          )}
+        {template && ['groups', 'providers', 'routes', 'load-balance'].includes(activeTab) && (
+          <div className="subscription-source-toggle">
+            <Segmented<'template' | 'custom'>
+              size="small"
+              aria-label="配置来源"
+              value={source}
+              onChange={setSource}
+              options={[
+                { label: '模板', value: 'template' },
+                { label: '自定义', value: 'custom' },
+              ]}
+            />
+          </div>
+        )}
       </TemplateWorkspace>
       {(error || yamlError || compositionError) && (
         <Alert

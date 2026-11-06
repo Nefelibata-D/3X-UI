@@ -30,6 +30,7 @@ defaults:
 
 jobs:
   build:
+    if: github.repository == 'MHSanaei/3x-ui'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -67,6 +68,7 @@ jobs:
           path: docs/out
 
   deploy:
+    if: github.repository == 'MHSanaei/3x-ui'
     needs: build
     runs-on: ubuntu-latest
     environment:

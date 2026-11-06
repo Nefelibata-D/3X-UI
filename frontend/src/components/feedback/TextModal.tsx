@@ -95,6 +95,7 @@ export default function TextModal({
             readOnly
             autoSize={{ minRows: 10, maxRows: 20 }}
             style={{
+              // Project: share code typography with the project subscription editor.
               fontFamily: 'var(--panel-code-font)',
               fontSize: 'var(--panel-code-size)',
               overflowY: 'auto',

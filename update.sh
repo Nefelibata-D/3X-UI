@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Project: panel scripts and release artifacts come from Nefelibata-D/3X-UI to preserve extensions.
+# Independent components (such as Xray) retain their own upstream sources.
+
 red='\033[0;31m'
 green='\033[0;32m'
 blue='\033[0;34m'

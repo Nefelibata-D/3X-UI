@@ -3,7 +3,11 @@ import type { ReactNode } from 'react';
 import { Alert, message, Button, Input, Select, Space, Tag } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isSeq } from 'yaml';
-import { blacklistRuleKinds, loadBalanceErrors, loadBalanceModel } from './loadBalanceModel';
+import {
+  blacklistRuleKinds,
+  loadBalanceErrors,
+  loadBalanceModel,
+} from '@/lib/clash/subscription/loadBalanceModel';
 
 interface Props {
   visibleGroups?: string[];
@@ -266,7 +270,11 @@ function BalanceContent({
         />
       )}
       {groups
-        .filter((g) => g.type === 'load-balance' && (editing ? selected === g.name : !visibleGroups || visibleGroups.includes(g.name)))
+        .filter(
+          (g) =>
+            g.type === 'load-balance' &&
+            (editing ? selected === g.name : !visibleGroups || visibleGroups.includes(g.name)),
+        )
         .map((g) => (
           <div
             key={g.name}

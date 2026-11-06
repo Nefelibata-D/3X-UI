@@ -26,6 +26,13 @@
   display: grid;
   gap: 6px;
 }
+.template-entry-card,
+.subscription-inherited-item:not(.template-route-card),
+.subscription-node-card {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
 .template-entry-list > .template-entry-add {
   justify-self: center;
   width: min(100%, 340px);

@@ -44,6 +44,7 @@ func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email st
 		}
 		needRestart = nr
 	}
+	// Project: reset the node ledgers alongside the upstream client counter before re-enabling traffic.
 	if err := clash.RequestClientReset(rec.Id); err != nil {
 		return needRestart, err
 	}

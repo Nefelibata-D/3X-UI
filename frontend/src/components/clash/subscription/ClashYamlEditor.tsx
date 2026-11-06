@@ -1,28 +1,20 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
-import * as monaco from "monaco-editor";
-import nightOwl from "./themes/night-owl.json";
-import lightOwl from "./themes/light-owl.json";
-import "monaco-editor/esm/vs/base/browser/ui/codicons/codiconStyles.js";
-import { templateSchema } from "@/pages/clash-subscriptions/templateSchema";
-import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import YamlWorker from "monaco-yaml/yaml.worker?worker";
-import { configureMonacoYaml } from "monaco-yaml";
-import { useTheme } from "@/hooks/useTheme";
-import { installTemplateReferences } from "@/pages/clash-subscriptions/templateReferenceEditor";
-import { validateTemplate } from "@/pages/clash-subscriptions/templateValidation";
-import "./YamlEditor.css";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import * as monaco from 'monaco-editor';
+import nightOwl from '@/components/clash/subscription/themes/night-owl.json';
+import lightOwl from '@/components/clash/subscription/themes/light-owl.json';
+import 'monaco-editor/esm/vs/base/browser/ui/codicons/codiconStyles.js';
+import { templateSchema } from '@/lib/clash/subscription/templateSchema';
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import YamlWorker from 'monaco-yaml/yaml.worker?worker';
+import { configureMonacoYaml } from 'monaco-yaml';
+import { useTheme } from '@/hooks/useTheme';
+import { installTemplateReferences } from '@/lib/clash/subscription/templateReferenceEditor';
+import { validateTemplate } from '@/lib/clash/subscription/templateValidation';
+import '@/components/clash/subscription/ClashYamlEditor.css';
 
-(
-  globalThis as typeof globalThis & { MonacoEnvironment: monaco.Environment }
-).MonacoEnvironment = {
+(globalThis as typeof globalThis & { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
   getWorker(_id, label) {
-    return label === "yaml" ? new YamlWorker() : new EditorWorker();
+    return label === 'yaml' ? new YamlWorker() : new EditorWorker();
   },
 };
 const yamlSupport = configureMonacoYaml(monaco, {
@@ -33,8 +25,8 @@ const yamlSupport = configureMonacoYaml(monaco, {
   enableSchemaRequest: false,
   schemas: [
     {
-      uri: "https://github.com/MetaCubeX/meta-json-schema/schemas/meta-json-schema.json",
-      fileMatch: ["**/*.yaml", "**/*.yml"],
+      uri: 'https://github.com/MetaCubeX/meta-json-schema/schemas/meta-json-schema.json',
+      fileMatch: ['**/*.yaml', '**/*.yml'],
       schema: templateSchema,
     },
   ],
@@ -44,7 +36,7 @@ if (import.meta.hot) import.meta.hot.dispose(() => yamlSupport.dispose());
 monaco.editor.defineTheme('night-owl', { ...nightOwl, base: 'vs-dark' });
 monaco.editor.defineTheme('light-owl', { ...lightOwl, base: 'vs' });
 
-export interface YamlEditorProps {
+export interface ClashYamlEditorProps {
   value: string;
   knownProxies?: string[];
   onChange?: (next: string) => void;
@@ -53,18 +45,18 @@ export interface YamlEditorProps {
   readOnly?: boolean;
   fontSize?: number;
 }
-export interface YamlEditorHandle {
+export interface ClashYamlEditorHandle {
   focus: () => void;
 }
 
-const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
-  function YamlEditor(
+const ClashYamlEditor = forwardRef<ClashYamlEditorHandle, ClashYamlEditorProps>(
+  function ClashYamlEditor(
     {
       value,
       knownProxies = [],
       onChange,
-      minHeight = "540px",
-      maxHeight = "65vh",
+      minHeight = '540px',
+      maxHeight = '65vh',
       readOnly = false,
       fontSize = 14,
     },
@@ -80,47 +72,43 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
     }>();
     const change = useRef(onChange);
     const known = useRef(knownProxies);
-    known.current = knownProxies;
+    useEffect(() => {
+      known.current = knownProxies;
+    }, [knownProxies]);
     const syncingValue = useRef(false);
     useEffect(() => {
       change.current = onChange;
     }, [onChange]);
     const initial = useRef({ value, readOnly });
     const { isDark } = useTheme();
-    useImperativeHandle(
-      ref,
-      () => ({ focus: () => editor.current?.focus() }),
-      [],
-    );
+    useImperativeHandle(ref, () => ({ focus: () => editor.current?.focus() }), []);
     useEffect(() => {
       if (!host.current) return;
       const model = monaco.editor.createModel(
         initial.current.value,
-        "yaml",
-        monaco.Uri.parse(
-          "inmemory://templates/" + crypto.randomUUID() + ".yaml",
-        ),
+        'yaml',
+        monaco.Uri.parse('inmemory://templates/' + crypto.randomUUID() + '.yaml'),
       );
       const instance = monaco.editor.create(host.current, {
         model,
         automaticLayout: true,
         readOnly: initial.current.readOnly,
         fontSize: 14,
-        fontFamily: "JetBrains Mono Variable",
-        fontWeight: "400",
+        fontFamily: 'JetBrains Mono Variable',
+        fontWeight: '400',
         lineHeight: 22,
         tabSize: 2,
         insertSpaces: true,
         minimap: { enabled: true },
         scrollBeyondLastLine: false,
         padding: { top: 12, bottom: 12 },
-        wordWrap: "on",
+        wordWrap: 'on',
         folding: true,
         contextmenu: false,
-        renderValidationDecorations: "on",
+        renderValidationDecorations: 'on',
         quickSuggestions: { other: true, strings: true, comments: false },
-        renderWhitespace: "selection",
-        ariaLabel: "YAML 模板编辑器",
+        renderWhitespace: 'selection',
+        ariaLabel: 'YAML 模板编辑器',
       });
       editor.current = instance;
       const disposeReferences = installTemplateReferences(instance, model);
@@ -128,12 +116,10 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
         const report = validateTemplate(model.getValue(), 'template', known.current);
         monaco.editor.setModelMarkers(
           model,
-          "template-validation",
+          'template-validation',
           report.diagnostics.map((issue) => {
             const start = model.getPositionAt(issue.start);
-            const end = model.getPositionAt(
-              Math.max(issue.start + 1, issue.end),
-            );
+            const end = model.getPositionAt(Math.max(issue.start + 1, issue.end));
             return {
               message: issue.message,
               severity: monaco.MarkerSeverity.Error,
@@ -187,20 +173,22 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
         monaco.editor.remeasureFonts();
         editor.current?.layout();
       });
-      return () => { disposed = true; };
+      return () => {
+        disposed = true;
+      };
     }, [fontSize]);
     useEffect(() => {
       editor.current?.updateOptions({ readOnly });
     }, [readOnly]);
     useEffect(() => {
-      monaco.editor.setTheme(isDark ? "night-owl" : "light-owl");
+      monaco.editor.setTheme(isDark ? 'night-owl' : 'light-owl');
     }, [isDark]);
     function runContextAction(action: string) {
       const instance = editor.current;
       if (!instance) return;
       setContextMenu(undefined);
-      if (action === "undo" || action === "redo") {
-        instance.trigger("contextmenu", action, null);
+      if (action === 'undo' || action === 'redo') {
+        instance.trigger('contextmenu', action, null);
         instance.focus();
         return;
       }
@@ -212,16 +200,13 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
       <div
         ref={shell}
         className="yaml-editor-shell"
-        style={{ height: maxHeight, minHeight, width: "100%" }}
+        style={{ height: maxHeight, minHeight, width: '100%' }}
         onContextMenu={(event) => {
           event.preventDefault();
           const instance = editor.current;
           if (!instance || !shell.current) return;
           const selection = instance.getSelection();
-          const position = instance.getTargetAtClientPoint(
-            event.clientX,
-            event.clientY,
-          )?.position;
+          const position = instance.getTargetAtClientPoint(event.clientX, event.clientY)?.position;
           if ((!selection || selection.isEmpty()) && position) {
             instance.setPosition(position);
           }
@@ -232,7 +217,7 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
             hasSelection: !!selection && !selection.isEmpty(),
           });
         }}
-        onClick={() => setContextMenu(undefined)}
+        onPointerDown={() => setContextMenu(undefined)}
       >
         <div ref={host} className="yaml-editor-host" />
         {contextMenu && (
@@ -242,55 +227,69 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
             aria-label="编辑器菜单"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onContextMenu={(event) => event.preventDefault()}
-            onClick={(event) => event.stopPropagation()}
+            tabIndex={-1}
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setContextMenu(undefined);
+                editor.current?.focus();
+              }
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const items = Array.from(
+                  event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+                );
+                const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                const next =
+                  (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                items[next]?.focus();
+              }
+            }}
           >
             {[
               {
-                label: "插入引用 / 补全字段",
-                action: "editor.action.triggerSuggest",
+                label: '插入引用 / 补全字段',
+                action: 'editor.action.triggerSuggest',
                 disabled: readOnly,
               },
               {
-                label: "重命名引用（F2）",
-                action: "editor.action.rename",
+                label: '重命名引用（F2）',
+                action: 'editor.action.rename',
                 disabled: readOnly,
               },
               { separator: true },
               {
-                label: "切换行注释（Ctrl+/）",
-                action: "editor.action.commentLine",
+                label: '切换行注释（Ctrl+/）',
+                action: 'editor.action.commentLine',
                 disabled: readOnly,
               },
-              { label: "撤销", action: "undo", disabled: readOnly },
-              { label: "重做", action: "redo", disabled: readOnly },
+              { label: '撤销', action: 'undo', disabled: readOnly },
+              { label: '重做', action: 'redo', disabled: readOnly },
               { separator: true },
               {
-                label: "剪切",
-                action: "editor.action.clipboardCutAction",
+                label: '剪切',
+                action: 'editor.action.clipboardCutAction',
                 disabled: readOnly || !contextMenu.hasSelection,
               },
               {
-                label: "复制",
-                action: "editor.action.clipboardCopyAction",
+                label: '复制',
+                action: 'editor.action.clipboardCopyAction',
                 disabled: !contextMenu.hasSelection,
               },
               {
-                label: "粘贴",
-                action: "editor.action.clipboardPasteAction",
+                label: '粘贴',
+                action: 'editor.action.clipboardPasteAction',
                 disabled: readOnly,
               },
               { separator: true },
               {
-                label: "全选",
-                action: "editor.action.selectAll",
+                label: '全选',
+                action: 'editor.action.selectAll',
                 disabled: false,
               },
             ].map((item, index) =>
-              "separator" in item ? (
-                <div
-                  className="yaml-editor-context-separator"
-                  key={`separator-${index}`}
-                />
+              'separator' in item ? (
+                <div className="yaml-editor-context-separator" key={`separator-${index}`} />
               ) : (
                 <button
                   key={item.action}
@@ -310,4 +309,4 @@ const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
     );
   },
 );
-export default YamlEditor;
+export default ClashYamlEditor;

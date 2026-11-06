@@ -131,6 +131,8 @@
     "saveQr": "儲存 QR 碼"
   },
   "menu": {
+    "loadBalancing": "負載均衡",
+    "clashSubscriptions": "Clash 訂閱",
     "theme": "主題",
     "dashboard": "系統狀態",
     "inbounds": "入站",

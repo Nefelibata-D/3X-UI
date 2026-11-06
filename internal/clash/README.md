@@ -1,5 +1,18 @@
 # Clash 进程内扩展
 
+## 当前代码边界
+
+- `models.go`：持久化数据模型；`catalog.go`：官方数据的项目只读视图；`weights.go` / `ratio.go`：权重解析与归一化。
+- `quota.go`：额度校验与保存；`overview.go`：管理端查询视图；`delivery_plan.go`：下发计划；`policy_operations.go`：重置与同步入口。网关与通行密钥分别保持在 `gateway/`、`passkey/`。
+- `remote.go`：仅解析节点身份并调用项目策略接口。`internal/web/runtime/project_request.go` 为官方 Remote 提供窄适配，复用认证、URL、超时、私网策略、请求完整性及响应解析。官方请求保留 64 MiB 上限；项目请求保持 8 MiB 上限并禁止重定向。
+- `internal/sub/clash_project.go`：项目订阅目录、预览和发布编排；官方 `clash_service.go` 继续负责授权和协议代理生成，仅接入来源记录与项目渲染。
+- `internal/web/clash.go`：项目启动钩子，`web.go` 保留生命周期调用。节点删除定制按用户要求保留，不改变此次重构的业务行为。
+- 前端共享编辑器在 `components/clash/subscription/`，校验与引用处理在 `lib/clash/subscription/`；schema 在 `schemas/clash/`，资源查询和 mutation 在 `api/queries/`。不从通用组件反向引用页面。
+
+本次重构的隔离回归入口：`internal/sub/test/project_subscription_test.go`（目录、预览与发布一致性）、`internal/web/runtime/test/project_request_test.go`（认证、查询串、重定向与响应上限）、`frontend/test/refactor.config.mjs`（共享缓存刷新、模式契约与订阅覆盖删除）。项目测试按约定保持未跟踪。构建和隔离测试不代表真实跨容器代理流量验收。
+
+## 功能契约与历史记录
+
 负载均衡为每个节点配置独立总额度 capacityBytes、默认权重和每月重置日/时间。客户端在“负载均衡”标签为每个已关联节点分配额度、继承或覆盖权重；分配从对应节点额度池扣减，权重不由额度推导。节点总额度 0 表示不限；有限节点要求明确的正数分配，并校验该节点所有客户端分配合计不超总额度。修改分配按新值替换旧值，保存串行化，避免并发超分。新增关联但未分配额度的有限节点策略拒绝准入。
 
 每个客户端 × 节点拥有独立下发策略、账本和重置操作。限额 0 表示无限：继续经过网关计量、回报，不触发额度停用。有限改为无限会解除宽限/额度停用，但保留当前用量。每个节点按主控时区独立配置每月 1–31 日和 00:00–23:59，短月取月末。客户端 resetMode=node 时跟随各节点周期；manual 时仅手动重置。重置只清零该客户端在该节点的用量，保留分配额度，不退回或重复扣减配置额度池，也不修改官方总流量与有效期。修改周期保留用量；账本记录周期配置，防止配置保存与账本刷新之间重启沿用旧周期。客户端列表和标签按节点显示用量及各自限额，不将官方历史合计流量按比例摊分。缺失回报显示待回报，远端异常显示错误，不伪造 0 用量。
@@ -64,7 +77,7 @@ YAML 模板编辑器使用 Monaco 0.52.2 与 monaco-yaml 5.4.0，语言服务 wo
 
 2026-11-06：模板黑名单允许空 proxy 或范例名称及不完整组成员，保留所属组与 DOMAIN 规则结构校验。发布前必须补齐有效代理，满足负载均衡至少两个节点且保留未列入黑名单的节点；保存订阅及实际拉取均执行检查。订阅绑定 dialers 保存实际代理名称到前置名称的映射，不保存独立代理凭据；检查缺失引用、重复节点及代理/节点组混合环路。
 
-上游窄接线：internal/sub/clash_service.go 复用原生授权、外部订阅转换与代理命名流程，通过 ProjectSubscription 提供不含凭据的代理目录和未保存草稿的发布校验。controller/clash_subscription.go 复用管理会话接口提供 subscription/proxies 和 subscription/validate，保存前验证；RenderSubscriptionBinding 在注入后应用 dialers 并验证。校验是项目配置完整性与引用检查，不代替 Mihomo 核心联网加载规则集或连接测试。新增项目测试在 internal/clash/test/subscriptions_test.go，浏览器隔离检查在 test/client-subscription-chain-check.cjs。
+上游窄接线：internal/sub/clash_service.go 复用原生授权、外部订阅转换与代理命名流程，通过 ProjectSubscription 提供管理员代理目录（含官方生成配置）和未保存草稿的发布校验。controller/clash_subscription.go 复用管理会话接口提供 subscription/proxies 和 subscription/validate，保存前验证；RenderSubscriptionBinding 在注入后应用 dialers 并验证。校验是项目配置完整性与引用检查，不代替 Mihomo 核心联网加载规则集或连接测试。新增项目测试在 internal/clash/test/subscriptions_test.go，浏览器隔离检查在 test/client-subscription-chain-check.cjs。
 
 YAML 编辑器使用校验器返回的 AST 源位置实时显示行内错误；引用、循环依赖、负载均衡和黑名单校验与模板校验共用逻辑。浅色与深色主题分别区分字段、字符串、数字、布尔值和注释。定向浏览器检查：test/yaml-diagnostics-check.cjs。
 

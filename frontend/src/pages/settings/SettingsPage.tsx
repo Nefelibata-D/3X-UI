@@ -35,6 +35,7 @@ interface ApiMsg {
   success?: boolean;
 }
 
+// Project: omit Telegram/Discord entry points only; their upstream services remain available.
 const tabSlugs = [
   'general',
   'security',

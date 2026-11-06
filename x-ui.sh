@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Project: panel scripts and release artifacts come from Nefelibata-D/3X-UI to preserve extensions.
+# Independent components (such as Xray) retain their own upstream sources.
+
 red='\033[0;31m'
 green='\033[0;32m'
 blue='\033[0;34m'
@@ -213,7 +216,7 @@ replace_xui_script() {
 installed_script_url() {
     local ver
     ver=$("${xui_folder}/x-ui" -v 2> /dev/null | tr -d '[:space:]')
-    if [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && curl -fsIL -o /dev/null "https://raw.githubusercontent.com/Nefelibata-D/3X-UI/v${ver}/x-ui.sh"; then
+    if [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] && curl -fsIL -o /dev/null "https://raw.githubusercontent.com/Nefelibata-D/3X-UI/v${ver}/x-ui.sh"; then
         echo "https://raw.githubusercontent.com/Nefelibata-D/3X-UI/v${ver}/x-ui.sh"
     else
         echo -e "${yellow}No x-ui.sh published for the installed version (${ver:-unknown}), using main${plain}" >&2

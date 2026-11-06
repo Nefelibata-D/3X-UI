@@ -131,6 +131,8 @@
     "saveQr": "Simpan QR"
   },
   "menu": {
+    "loadBalancing": "Load balancing",
+    "clashSubscriptions": "Clash subscriptions",
     "theme": "Tema",
     "dashboard": "Ikhtisar",
     "inbounds": "Inbound",

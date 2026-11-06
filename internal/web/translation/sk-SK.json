@@ -131,6 +131,8 @@
     "saveQr": "Uložiť QR kód"
   },
   "menu": {
+    "loadBalancing": "Load balancing",
+    "clashSubscriptions": "Clash subscriptions",
     "theme": "Vzhľad",
     "dashboard": "Prehľad",
     "inbounds": "Vstupy",

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
@@ -543,6 +543,7 @@ func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
 	if c.Request == nil || c.Request.Method != http.MethodGet || c.Writer.Status() != http.StatusOK {
 		return
 	}
+	// Project: record the supported client sync separately from ordinary subscription access.
 	if err := clash.RecordClientSubscriptionSync(c.Param("subid"), c.Request.UserAgent()); err != nil {
 		logger.Warning("Failed to record Clash Verge subscription sync:", err)
 	}

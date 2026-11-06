@@ -21,6 +21,7 @@ export function useWebSocketBridge() {
       if (invalidateTimer != null) clearTimeout(invalidateTimer);
       invalidateTimer = window.setTimeout(() => {
         invalidateTimer = null;
+        // Project: derived policy views need refresh even when upstream local invalidation is coalesced.
         queryClient.invalidateQueries({ queryKey: keys.clash.root() });
         if (isRecentLocalInvalidate()) return;
         if (p.type === 'inbounds') {

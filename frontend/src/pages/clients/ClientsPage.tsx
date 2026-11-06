@@ -623,6 +623,7 @@ export default function ClientsPage() {
   // of the file (table dataSource, mobile cards, select-all) doesn't need
   // a rename.
   const filteredClients = clients;
+  // Project: resolve the selected client from current query data so refreshes also update the modal.
   const subscriptionClient = clients.find((client) => client.email === subscriptionEmail);
 
   // Sort is server-side now; the page already arrives in the requested
@@ -1885,7 +1886,19 @@ export default function ClientsPage() {
           />
         </LazyMount>
         <LazyMount when={!!subscriptionClient}>
-          {subscriptionClient && <ClientSubscriptionModal key={subscriptionClient.id} client={subscriptionClient} subscriptionURL={subSettings?.subClashEnable && subSettings.subClashURI ? subSettings.subClashURI + subscriptionClient.subId : undefined} onClose={() => setSubscriptionEmail(undefined)} />}
+          {/* Project: mount the project subscription editor beside the upstream client dialogs. */}
+          {subscriptionClient && (
+            <ClientSubscriptionModal
+              key={subscriptionClient.id}
+              client={subscriptionClient}
+              subscriptionURL={
+                subSettings?.subClashEnable && subSettings.subClashURI
+                  ? subSettings.subClashURI + subscriptionClient.subId
+                  : undefined
+              }
+              onClose={() => setSubscriptionEmail(undefined)}
+            />
+          )}
         </LazyMount>
         <LazyMount when={infoOpen}>
           <ClientInfoModal

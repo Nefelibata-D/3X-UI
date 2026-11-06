@@ -708,6 +708,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	if err := validateClientTrafficReset(updated.TrafficReset, updated.TrafficResetDay); err != nil {
 		return false, err
 	}
+	// Project: an upstream total-limit edit must still cover the allocated node budgets.
 	if err := clash.ValidateClientTotalLimit(id, updated.TotalGB); err != nil {
 		return false, err
 	}

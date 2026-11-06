@@ -210,7 +210,12 @@ func (r *Remote) baseURL() (string, error) {
 	return u.String(), nil
 }
 
+// Project: keep upstream transport defaults here; CallProject selects its stricter policy in project_request.go.
 func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelope, error) {
+	return r.request(ctx, method, path, body, remoteRequestPolicy{maxResponseBytes: maxRemoteResponseBytes})
+}
+
+func (r *Remote) request(ctx context.Context, method, path string, body any, policy remoteRequestPolicy) (*envelope, error) {
 	// mtls nodes authenticate via the client certificate, so a bearer token is
 	// optional for them; every other mode still requires one.
 	if r.node.ApiToken == "" && r.node.TlsVerifyMode != "mtls" {
@@ -287,7 +292,7 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.Do(req)
+	resp, err := policy.client(client).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: %w", method, path, err)
 	}
@@ -310,14 +315,14 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 	// Fast-fail on an honestly-declared oversize body; the LimitReader below is
 	// the real guard since Content-Length is untrusted, may be absent, or is -1
 	// under transparent decompression.
-	if resp.ContentLength > maxRemoteResponseBytes {
-		return nil, fmt.Errorf("%s %s: %w (content-length %d, cap %d)", method, path, errRemoteResponseTooLarge, resp.ContentLength, maxRemoteResponseBytes)
+	if resp.ContentLength > policy.maxResponseBytes {
+		return nil, fmt.Errorf("%s %s: %w (content-length %d, cap %d)", method, path, errRemoteResponseTooLarge, resp.ContentLength, policy.maxResponseBytes)
 	}
 
-	raw, err := readCappedBody(resp.Body, maxRemoteResponseBytes)
+	raw, err := readCappedBody(resp.Body, policy.maxResponseBytes)
 	if err != nil {
 		if errors.Is(err, errRemoteResponseTooLarge) {
-			return nil, fmt.Errorf("%s %s: %w (cap %d bytes)", method, path, err, maxRemoteResponseBytes)
+			return nil, fmt.Errorf("%s %s: %w (cap %d bytes)", method, path, err, policy.maxResponseBytes)
 		}
 		return nil, fmt.Errorf("read body: %w", err)
 	}

@@ -119,14 +119,6 @@ func UpsertRatio(row ClientRatio) error {
 	}).Create(&row).Error
 }
 
-func DeleteRatio(clientID int) error {
-	db, err := dbOrErr()
-	if err != nil {
-		return err
-	}
-	return db.Where("client_id = ?", clientID).Delete(&ClientRatio{}).Error
-}
-
 func ListDeliveries() ([]Delivery, error) {
 	db, err := dbOrErr()
 	if err != nil {
@@ -181,14 +173,6 @@ func SaveDeliveryReport(id int, status, lastError, reportJSON string, resetPendi
 		"reset_pending":    resetPending,
 		"updated_at":       nowMillis(),
 	}).Error
-}
-
-func DeleteDelivery(id int) error {
-	db, err := dbOrErr()
-	if err != nil {
-		return err
-	}
-	return db.Where("id = ?", id).Delete(&Delivery{}).Error
 }
 
 func ListAppliedPolicies() ([]AppliedPolicy, error) {
@@ -320,14 +304,6 @@ func SaveAppliedLedger(id int, st gateway.PersistedState) error {
 		"disabled_at":         st.DisabledAt,
 		"updated_at":          nowMillis(),
 	}).Error
-}
-
-func DeleteAppliedPolicy(id int) error {
-	db, err := dbOrErr()
-	if err != nil {
-		return err
-	}
-	return db.Where("id = ?", id).Delete(&AppliedPolicy{}).Error
 }
 
 func AppliedPolicyByGatewayState(row AppliedPolicy) gateway.PersistedState {

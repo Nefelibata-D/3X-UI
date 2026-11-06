@@ -38,6 +38,7 @@ import { DnsTab } from './dns';
 import { WarpModal, NordModal, PiaModal } from './overrides';
 import './XrayPage.css';
 
+// Project: hide Xray balancer editing; client-side selection lives in the project page, compatibility code stays.
 const SECTION_SLUGS = ['basic', 'routing', 'outbound', 'dns', 'advanced'];
 
 type AdvKey = 'xraySetting' | 'inboundSettings' | 'outboundSettings' | 'routingRuleSettings';

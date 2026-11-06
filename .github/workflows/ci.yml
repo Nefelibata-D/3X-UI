@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   go-test:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,6 +43,7 @@ jobs:
           go test -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
 
   postgres-durable-first:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -155,6 +157,7 @@ jobs:
   # The migration tests write and drop their own tables, so they need a
   # scratch database instead of the durable one the panel tests use.
   postgres-migration:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -193,6 +196,7 @@ jobs:
           fi
 
   codegen:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -212,6 +216,7 @@ jobs:
         run: cmp frontend/public/openapi.json docs/public/openapi.json
 
   govulncheck:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -228,6 +233,7 @@ jobs:
 
   # Race + shuffle hygiene gate: data races and order-dependent tests fail the build.
   race:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -246,6 +252,7 @@ jobs:
   # A real master and node panel, each its own process, driven through node sync.
   # A SKIP here means the binary was never handed over, so it fails the job.
   node-e2e:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -262,6 +269,7 @@ jobs:
   # Brief native-fuzz smoke on the security-/parser-critical decoders. Each runs the
   # generated corpus plus 30s of exploration; a crash here is a real input-handling bug.
   fuzz-smoke:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -277,6 +285,7 @@ jobs:
           go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
 
   golangci:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -298,6 +307,7 @@ jobs:
   # and are gated on errors only; the scripts that are clean today are gated on
   # everything.
   shell-lint:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -318,6 +328,7 @@ jobs:
           shellcheck --severity=error install.sh update.sh x-ui.sh
 
   frontend:
+    if: (github.repository == 'Nefelibata-D/3X-UI' || github.repository == 'MHSanaei/3x-ui')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

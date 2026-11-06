@@ -131,6 +131,8 @@
     "saveQr": "Сохранить QR"
   },
   "menu": {
+    "loadBalancing": "Load balancing",
+    "clashSubscriptions": "Clash subscriptions",
     "theme": "Тема",
     "dashboard": "Дашборд",
     "inbounds": "Входящие",

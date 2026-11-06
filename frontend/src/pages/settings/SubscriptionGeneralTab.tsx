@@ -23,6 +23,7 @@ interface SubscriptionGeneralTabProps {
   updateSetting: (patch: Partial<AllSetting>) => void;
 }
 
+// Project: Happ/Incy settings are intentionally absent from this UI, not disabled in the backend.
 const PANEL_SETTINGS_TAB = '1';
 
 export default function SubscriptionGeneralTab({

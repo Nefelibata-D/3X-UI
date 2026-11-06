@@ -122,8 +122,9 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/server/clientIps":            {http.MethodGet: {}, http.MethodPost: {}},
 	"/clients/clientIpsByGuid":     {http.MethodPost: {}},
 	"/hosts/list":                  {http.MethodGet: {}},
-	"/clash/policy/apply":          {http.MethodPost: {}},
-	"/clash/policy/report":         {http.MethodGet: {}},
+	// Project: node tokens may use only these child policy endpoints, not the full project admin API.
+	"/clash/policy/apply":  {http.MethodPost: {}},
+	"/clash/policy/report": {http.MethodGet: {}},
 }
 
 var nodeAdminScopeAllow = map[string]map[string]struct{}{
@@ -236,6 +237,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Project load-balancing gateway policy. Admin/session routes plus the
 	// child-side apply/report endpoints used by a master's node token.
 	NewClashController(api)
+	// Project: passkey management shares the existing authenticated admin API group.
 	registerPasskeyManagement(api)
 
 	// Extra routes

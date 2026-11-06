@@ -39,7 +39,7 @@ import { resolveExternalLinkExpiry } from '@/lib/clients/external-link';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import { useClientHwids } from '@/hooks/useClientHwids';
 import { useRawHostsQuery } from '@/api/queries/useRawHostsQuery';
-import { useClashClientRatioQuery } from '@/api/queries/useClashClientRatioQuery';
+import { useClientQuotaWarning } from '@/api/queries/useClientQuotaWarning';
 import { DateTimePicker, SelectAllClearButtons } from '@/components/form';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import ClientHwidListModal from '@/components/clients/ClientHwidList';
@@ -285,15 +285,10 @@ export default function ClientFormModal({
   const uuid = useWatch({ control: methods.control, name: 'uuid' });
   const trafficReset = useWatch({ control: methods.control, name: 'trafficReset' });
   const totalGB = useWatch({ control: methods.control, name: 'totalGB' });
-  const nodeRatioQuery = useClashClientRatioQuery(isEdit ? client?.id : undefined);
-  const draftTotalBytes = gbToBytes(Number(totalGB) || 0);
-  const nodeQuotaRows = nodeRatioQuery.data?.nodes ?? [];
-  const totalAllocatedNodeQuota = nodeQuotaRows.reduce((sum, node) => sum + node.budgetBytes, 0);
-  const hasUnlimitedNodeQuota = nodeQuotaRows.some((node) => node.budgetBytes === 0);
-  const totalNodeQuotaConflict = draftTotalBytes > 0 && (hasUnlimitedNodeQuota || totalAllocatedNodeQuota > draftTotalBytes);
-  const totalNodeQuotaError = hasUnlimitedNodeQuota
-    ? '存在无限节点额度，不能设置有限的客户端总流量'
-    : '节点额度合计超过客户端总流量上限';
+  // Project: compare the upstream total cap with node allocations before submitting the base form.
+  const { conflict: totalNodeQuotaConflict, error: totalNodeQuotaError } = useClientQuotaWarning(
+    isEdit ? client?.id : undefined, gbToBytes(Number(totalGB) || 0),
+  );
   const password = useWatch({ control: methods.control, name: 'password' });
   const subId = useWatch({ control: methods.control, name: 'subId' });
   const limitHwid = useWatch({ control: methods.control, name: 'limitHwid' });
@@ -306,6 +301,7 @@ export default function ClientFormModal({
     remove: removeExternalLink,
   } = useFieldArray({ control: methods.control, name: 'externalLinks' });
 
+  // Project: the policy tab saves independently, so it must not submit the upstream client form.
   const [activeTab, setActiveTab] = useState("basic");
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -1134,9 +1130,19 @@ export default function ClientFormModal({
                             />
                           </FormField>
                         </Col>
+                        {/* Project: independent node cycles apply only when the upstream total reset is disabled. */}
                         {trafficReset === 'never' && (
                           <Col xs={24} md={12}>
-                            <Form.Item label={<span>节点流量重置 <Tooltip title="总流量重置开启时，节点流量会与总流量同时清零；总流量重置关闭时，可单独设置节点流量的重置方式。"><QuestionCircleOutlined aria-label="节点流量重置说明" /></Tooltip></span>}>
+                            <Form.Item
+                              label={
+                                <span>
+                                  节点流量重置{' '}
+                                  <Tooltip title="总流量重置开启时，节点流量会与总流量同时清零；总流量重置关闭时，可单独设置节点流量的重置方式。">
+                                    <QuestionCircleOutlined aria-label="节点流量重置说明" />
+                                  </Tooltip>
+                                </span>
+                              }
+                            >
                               <ClientNodeResetMode clientId={isEdit ? client?.id : undefined} />
                             </Form.Item>
                           </Col>
@@ -1739,7 +1745,6 @@ export default function ClientFormModal({
                   children: (
                     <ClientLoadBalancingTab
                       clientId={client?.id}
-                      email={email}
                       mode={isEdit ? 'edit' : 'add'}
                     />
                   ),

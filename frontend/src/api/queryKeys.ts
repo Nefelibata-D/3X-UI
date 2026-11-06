@@ -8,9 +8,15 @@ export const keys = {
     root: () => ['nodes'] as const,
     list: () => ['nodes', 'list'] as const,
   },
+  // Project: all policy and subscription consumers share this invalidation namespace.
   clash: {
     root: () => ['clash'] as const,
     overview: () => ['clash', 'overview'] as const,
+    rulesets: () => ['clash', 'rulesets'] as const,
+    templates: () => ['clash', 'templates'] as const,
+    subscriptions: () => ['clash', 'subscription'] as const,
+    subscription: (id: number) => ['clash', 'subscription', id] as const,
+    proxies: (id: number) => ['clash', 'proxies', id] as const,
     client: (id: number) => ['clash', 'client', id] as const,
   },
   hosts: {

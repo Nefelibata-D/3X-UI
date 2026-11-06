@@ -169,6 +169,7 @@ export default function NodesPage() {
     (node: NodeRecord) => {
       modal.confirm({
         title: t('pages.nodes.deleteConfirmTitle', { name: node.name }),
+        // Project: describe master-side detachment rather than the upstream inbound deletion restriction.
         content: '删除后将清理主控中的关联入站、节点权重和额度配置。远端面板及其代理配置不变，客户端账户和其他节点不受影响。',
         okText: t('delete'),
         okType: 'danger',

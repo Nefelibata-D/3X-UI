@@ -549,6 +549,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 	// origin (an inbound the node forwards from its own sub-node) is kept as-is,
 	// so a chained Node1->Node2->Node3 still attributes Node3's inbounds to Node3.
 	var nodeRow model.Node
+	// Project: discard a late snapshot after node removal instead of recreating master-side copies.
 	if err := db.Select("guid", "config_dirty", "inbound_sync_mode", "inbound_tags").Where("id = ?", nodeID).First(&nodeRow).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return false, nil

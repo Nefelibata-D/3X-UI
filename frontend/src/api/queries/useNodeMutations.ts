@@ -51,6 +51,7 @@ export function useNodeMutations() {
         invalidate();
         queryClient.invalidateQueries({ queryKey: keys.inbounds.root() });
         queryClient.invalidateQueries({ queryKey: keys.clients.root() });
+        // Project: node removal also detaches project assignments and subscription members.
         queryClient.invalidateQueries({ queryKey: keys.clash.root() });
       }
     },

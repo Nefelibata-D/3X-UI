@@ -1,44 +1,8 @@
 import { parseDocument, stringify } from 'yaml';
 import { z } from 'zod';
 
-const strings = z
-  .array(z.string())
-  .nullish()
-  .transform((v) => v ?? []);
-export const subscriptionSchema = z.object({
-  lastSyncAt: z.number().optional().default(0),
-  updatedAt: z.number().optional().default(0),
-  templateId: z.number(),
-  dialers: z
-    .record(z.string(), z.string())
-    .nullish()
-    .transform((v) => v ?? {}),
-  disabledRules: strings,
-  disabledProviders: strings,
-  disabledGroups: strings,
-  content: z.string(),
-  groups: z
-    .array(z.object({ group: z.string(), allNodes: z.boolean(), nodes: strings }))
-    .nullish()
-    .transform((v) => v ?? []),
-});
-export type Subscription = z.infer<typeof subscriptionSchema>;
-export const subscriptionTemplateSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  content: z.string(),
-});
-export const emptySubscription: Subscription = {
-  updatedAt: 0,
-  lastSyncAt: 0,
-  templateId: 0,
-  dialers: {},
-  disabledRules: [],
-  disabledProviders: [],
-  disabledGroups: [],
-  content: '{}',
-  groups: [],
-};
+import type { Subscription } from '@/schemas/clash/subscription';
+
 export type Section = 'rules' | 'rule-providers' | 'proxy-groups';
 export const disabledField = {
   rules: 'disabledRules',

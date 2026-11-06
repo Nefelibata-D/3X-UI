@@ -187,12 +187,13 @@ export default function AppSidebar() {
 
   const tabs = useMemo<{ key: string; icon: ComponentType; title: string }[]>(
     () => [
+      // Project: disabled Clash publication hides its editor entry; this is not API authorization.
       ...PANEL_ROUTES.filter(
         (route) => route.path !== '/clash-subscriptions' || allSetting.subClashEnable,
       ).map((route) => ({
         key: route.path,
         icon: route.icon,
-        title: route.title ?? t(route.titleKey),
+        title: t(route.titleKey),
       })),
       { key: LOGOUT_KEY, icon: LogoutOutlined, title: t('logout') },
     ],

@@ -14,19 +14,9 @@
   width: auto;
   justify-content: flex-start;
 }
-.subscription-inherited-item:not(.template-route-card),
-.subscription-node-card {
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 8px;
-  padding: 8px 12px;
-}
 .subscription-inherited-disabled,
 .subscription-inherited-overridden {
-  background: color-mix(
-    in srgb,
-    var(--ant-color-error) 4%,
-    var(--ant-color-bg-container)
-  );
+  background: color-mix(in srgb, var(--ant-color-error) 4%, var(--ant-color-bg-container));
 }
 .subscription-inherited-disabled .template-entry-title,
 .subscription-inherited-overridden .template-entry-title {

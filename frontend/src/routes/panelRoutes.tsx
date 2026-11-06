@@ -29,7 +29,6 @@ const XrayPage = lazy(() => import('@/pages/xray/XrayPage'));
 export interface PanelRoute {
   path: string;
   titleKey: string;
-  title?: string;
   icon: ComponentType;
   component: ComponentType;
 }
@@ -41,15 +40,15 @@ export const PANEL_ROUTES: PanelRoute[] = [
   { path: '/inbounds', titleKey: 'menu.inbounds', icon: ImportOutlined, component: InboundsPage },
   { path: '/clients', titleKey: 'menu.clients', icon: TeamOutlined, component: ClientsPage },
   { path: '/groups', titleKey: 'menu.groups', icon: TagsOutlined, component: GroupsPage },
+  // Project: register extension pages here so routing, titles and navigation retain one source.
   { path: '/nodes', titleKey: 'menu.nodes', icon: ClusterOutlined, component: NodesPage },
   {
     path: '/load-balancing',
-    titleKey: '',
-    title: '负载均衡',
+    titleKey: 'menu.loadBalancing',
     icon: ApartmentOutlined,
     component: LoadBalancingPage,
   },
-  { path: '/clash-subscriptions', titleKey: '', title: 'Clash 订阅', icon: ReadOutlined, component: ClashSubscriptionsPage },
+  { path: '/clash-subscriptions', titleKey: 'menu.clashSubscriptions', icon: ReadOutlined, component: ClashSubscriptionsPage },
   { path: '/hosts', titleKey: 'menu.hosts', icon: GlobalOutlined, component: HostsPage },
   { path: '/outbound', titleKey: 'menu.outbounds', icon: ExportOutlined, component: XrayPage },
   { path: '/routing', titleKey: 'menu.routing', icon: SwapOutlined, component: XrayPage },

@@ -42,7 +42,19 @@ export const ClientRowActions = memo(function ClientRowActions({
   const { t } = useTranslation();
   return (
     <Space size={4}>
-      {onSubscription && <Tooltip title="Clash 订阅"><Button size="small" type="text" style={ICON_BUTTON_STYLE} icon={<LinkOutlined aria-hidden />} aria-label="Clash 订阅" onClick={() => onSubscription(email)} /></Tooltip>}
+      {/* Project: the parent owns subscription state; keep this row action optional for other consumers. */}
+      {onSubscription && (
+        <Tooltip title="Clash 订阅">
+          <Button
+            size="small"
+            type="text"
+            style={ICON_BUTTON_STYLE}
+            icon={<LinkOutlined aria-hidden />}
+            aria-label="Clash 订阅"
+            onClick={() => onSubscription(email)}
+          />
+        </Tooltip>
+      )}
       <Tooltip title={t('pages.clients.qrCode')}>
         <Button
           size="small"

@@ -133,6 +133,7 @@ const JsonEditor = forwardRef<JsonEditorHandle, JsonEditorProps>(function JsonEd
           EditorView.theme({
             '&': { height: '100%' },
             '.cm-scroller': {
+              // Project: share code typography with the project subscription editor.
               fontFamily: 'var(--panel-code-font)',
               fontSize: 'var(--panel-code-size)',
               minHeight,

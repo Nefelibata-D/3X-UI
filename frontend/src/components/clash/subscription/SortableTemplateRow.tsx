@@ -1,6 +1,8 @@
-import { useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import Sortable from 'sortablejs';
 import { isMap, isSeq, parseDocument } from 'yaml';
+
+const MoveEntry = createContext<((from: number, to: number) => void) | null>(null);
 
 interface Props {
   collection: 'rule-providers' | 'proxy-groups' | 'rules';
@@ -83,22 +85,11 @@ export function SortableTemplateList({ collection, content, enabled, onChange, c
   }, [enabled, move]);
 
   return (
-    <div
-      ref={root}
-      className="template-entry-list"
-      onKeyDown={(event) => {
-        if (!(event.target instanceof Element) || !event.target.closest('.template-sort-handle'))
-          return;
-        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-        event.preventDefault();
-        const item = event.target.closest('[data-sort-item]');
-        const items = Array.from(event.currentTarget.querySelectorAll(':scope > [data-sort-item]'));
-        const index = items.findIndex((element) => element === item);
-        move(index, index + (event.key === 'ArrowUp' ? -1 : 1));
-      }}
-    >
-      {children}
-    </div>
+    <MoveEntry value={move}>
+      <div role="group" aria-label="可排序条目" ref={root} className="template-entry-list">
+        {children}
+      </div>
+    </MoveEntry>
   );
 }
 
@@ -111,10 +102,23 @@ export default function SortableTemplateRow({
   enabled: boolean;
   children: ReactNode;
 }) {
+  const move = useContext(MoveEntry);
+  if (!move) throw new Error('SortableTemplateRow requires SortableTemplateList');
   return (
     <div className="template-entry-row">
       {showHandle && (
         <button
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            const item = event.currentTarget.closest('[data-sort-item]');
+            if (!item?.parentElement) return;
+            const items = Array.from(
+              item.parentElement.querySelectorAll(':scope > [data-sort-item]'),
+            );
+            const index = items.indexOf(item);
+            move(index, index + (event.key === 'ArrowUp' ? -1 : 1));
+          }}
           className="template-sort-handle"
           type="button"
           disabled={!enabled}

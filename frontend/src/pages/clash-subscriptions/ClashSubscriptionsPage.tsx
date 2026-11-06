@@ -1,4 +1,4 @@
-import { blacklistRuleKinds } from './loadBalanceModel';
+import { blacklistRuleKinds } from '@/lib/clash/subscription/loadBalanceModel';
 import { EditOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Tag } from 'antd';
 import './RuleFilePreview.css';
@@ -10,8 +10,8 @@ import { useTheme } from '@/hooks/useTheme';
 import '@/styles/page-shell.css';
 import Templates from './Templates';
 import { useState, type UIEvent } from 'react';
-import { useForm } from 'react-hook-form';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm, useWatch } from 'react-hook-form';
+import { useClashRuleSets, useSaveClashRuleSet } from '@/api/queries/useClashSubscriptions';
 import {
   message,
   Button,
@@ -26,20 +26,9 @@ import {
   Typography,
 } from 'antd';
 import { useAllSettings } from '@/api/queries/useAllSettings';
-import { HttpUtil } from '@/utils';
-import { z } from 'zod';
+import { importRules } from '@/lib/clash/subscription/api';
+import type { RuleSet as Row } from '@/schemas/clash/subscription';
 
-const rowSchema = z.object({
-  updatedAt: z.string().nullable().optional(),
-  id: z.number(),
-  code: z.string(),
-  filename: z.string(),
-  name: z.string(),
-  routing: z.boolean(),
-  blacklist: z.boolean(),
-  rules: z.array(z.string()),
-});
-type Row = z.infer<typeof rowSchema>;
 const blank: Row = {
   id: 0,
   code: '',
@@ -86,9 +75,6 @@ const kinds = [
   'OR',
   'NOT',
 ];
-const endpoint = '/panel/api/clash/rulesets';
-const key = ['clash', 'rulesets'];
-const options = { silent: true, headers: { 'Content-Type': 'application/json' } };
 function url(row: Row) {
   return new URL(
     (window.X_UI_BASE_PATH || '/').replace(/\/+$/, '') +
@@ -108,17 +94,10 @@ const scrollVisibility = {
   },
 };
 function Rules() {
-  const cache = useQueryClient();
-  const list = useQuery({
-    queryKey: key,
-    queryFn: async () => {
-      const res = await HttpUtil.get(endpoint);
-      if (!res.success) throw new Error(res.msg);
-      return rowSchema.array().parse(res.obj);
-    },
-  });
+  const list = useClashRuleSets();
+  const saveMutation = useSaveClashRuleSet();
   const form = useForm<Row>({ defaultValues: blank });
-  const row = form.watch();
+  const row = useWatch({ control: form.control }) as Row;
   const [editing, edit] = useState(false);
   const [entryTab, setEntryTab] = useState('entries');
   const [paste, setPaste] = useState('');
@@ -137,19 +116,15 @@ function Rules() {
     edit(true);
   }
   async function importContent(content: string) {
-    const res = await HttpUtil.post(endpoint + '/import', { content }, options);
-    if (!res.success) throw new Error(res.msg);
-    rulesChanged([...form.getValues('rules'), ...z.array(z.string()).parse(res.obj)]);
+    rulesChanged([...form.getValues('rules'), ...(await importRules(content))]);
     setPaste('');
     setEntryTab('entries');
   }
   async function save() {
     setSaving(true);
     try {
-      const res = await HttpUtil.post(endpoint, form.getValues(), options);
-      if (!res.success) throw new Error(res.msg);
+      await saveMutation.mutateAsync(form.getValues());
       edit(false);
-      await cache.invalidateQueries({ queryKey: key });
     } catch (e) {
       void message.error(String(e));
     } finally {
@@ -175,7 +150,7 @@ function Rules() {
                     <Button
                       type="text"
                       size="small"
-                      icon={<EditOutlined />}
+                      icon={<EditOutlined aria-hidden />}
                       onClick={() => open(r)}
                     >
                       编辑
@@ -183,7 +158,7 @@ function Rules() {
                     <Button
                       type="text"
                       size="small"
-                      icon={<CopyOutlined />}
+                      icon={<CopyOutlined aria-hidden />}
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(url(r));
@@ -198,7 +173,7 @@ function Rules() {
                     <Button
                       type="link"
                       size="small"
-                      icon={<DownloadOutlined />}
+                      icon={<DownloadOutlined aria-hidden />}
                       href={url(r)}
                       download={r.filename}
                     >
@@ -273,10 +248,7 @@ function Rules() {
               </Form.Item>
             </Flex>
             <Flex vertical style={{ flex: '5 1 170px', minWidth: 0 }}>
-              <Form.Item
-                label="用途"
-                tooltip="黑名单支持 DOMAIN / PROCESS 系列规则。"
-              >
+              <Form.Item label="用途" tooltip="黑名单支持 DOMAIN / PROCESS 系列规则。">
                 <Space>
                   <Checkbox
                     checked={row.routing}

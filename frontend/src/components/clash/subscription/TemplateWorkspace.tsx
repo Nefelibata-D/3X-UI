@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Flex, Select, Tag, Typography } from 'antd';
-import YamlEditor from '@/components/form/YamlEditor';
-import './Templates.css';
+import YamlEditor from '@/components/clash/subscription/ClashYamlEditor';
+import '@/components/clash/subscription/Templates.css';
 
 interface Props {
   content: string;
@@ -47,9 +47,9 @@ export default function TemplateWorkspace({
                 }}
               />
             </Flex>
-          <Tag color={error ? 'error' : 'success'}>
-            {error ? '语法待修正' : `${groupCount} 个策略组`}
-          </Tag>
+            <Tag color={error ? 'error' : 'success'}>
+              {error ? '语法待修正' : `${groupCount} 个策略组`}
+            </Tag>
           </Flex>
         </Flex>
         <YamlEditor

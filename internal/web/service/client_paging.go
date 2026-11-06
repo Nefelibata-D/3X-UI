@@ -19,6 +19,7 @@ import (
 // so the list payload stays compact even when the panel manages thousands
 // of clients. Modals that need the full record still call /get/:email.
 type ClientSlim struct {
+	// Project: expose stable identity for node policy/subscription APIs; email remains editable upstream.
 	Id           int                 `json:"id"`
 	Email        string              `json:"email" example:"alice@example.com"`
 	SubID        string              `json:"subId" example:"abcd1234"`

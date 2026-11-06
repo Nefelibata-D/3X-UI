@@ -1,6 +1,8 @@
-import { replaceSymbol, templateSymbols } from './templateSymbols';
-import ProxyChains from './ProxyChains';
-import SortableTemplateRow, { SortableTemplateList } from './SortableTemplateRow';
+import { replaceSymbol, templateSymbols } from '@/lib/clash/subscription/templateSymbols';
+import ProxyChains from '@/components/clash/subscription/ProxyChains';
+import SortableTemplateRow, {
+  SortableTemplateList,
+} from '@/components/clash/subscription/SortableTemplateRow';
 import { useState, useId } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, Button, Form, Input, Select, Space, Tag } from 'antd';

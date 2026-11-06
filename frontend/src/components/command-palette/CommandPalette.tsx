@@ -74,6 +74,7 @@ export const PALETTE_KEYWORDS: Record<string, string[]> = {
   '/clients': ['clients', 'users', 'sub', 'traffic', 'quota'],
   '/groups': ['groups', 'tags', 'batch'],
   '/nodes': ['nodes', 'servers', 'cluster', 'remote nodes'],
+  '/clash-subscriptions': ['clash', 'mihomo', 'subscriptions', 'templates', 'rulesets'],
   '/load-balancing': ['load balancing', 'budget', 'quota', 'gateway', 'grace', 'traffic'],
   '/hosts': ['hosts', 'sni', 'domains'],
   '/outbound': ['outbounds', 'freedom', 'blackhole', 'socks', 'http', 'warp', 'nord', 'pia'],
@@ -363,9 +364,10 @@ export default function CommandPalette() {
       });
     });
 
+    // Project: mirror the sidebar visibility of the project subscription editor.
     const pages = PANEL_ROUTES.filter((route) => route.path !== '/clash-subscriptions' || allSetting.subClashEnable).map((route) => ({
       path: route.path,
-      title: route.title ?? t(route.titleKey),
+      title: t(route.titleKey),
       keywords: PALETTE_KEYWORDS[route.path] ?? [],
       icon: <route.icon aria-hidden />,
     }));

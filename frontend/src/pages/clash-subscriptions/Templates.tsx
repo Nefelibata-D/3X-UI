@@ -22,54 +22,23 @@ import {
   PlusOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useClashTemplates,
+  useClashRuleSets,
+  useClashTemplateMutations,
+} from '@/api/queries/useClashSubscriptions';
+import type { Template } from '@/schemas/clash/subscription';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMemo, useState } from 'react';
 import { isMap, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
-import { HttpUtil } from '@/utils';
-import LoadBalance from './LoadBalance';
-import { validateTemplate } from './templateValidation';
-import TemplateWorkspace from './TemplateWorkspace';
-import NodeGroups from './NodeGroups';
-import TemplateInsert from './TemplateInsert';
-import './Templates.css';
+import LoadBalance from '@/components/clash/subscription/LoadBalance';
+import { validateTemplate } from '@/lib/clash/subscription/templateValidation';
+import TemplateWorkspace from '@/components/clash/subscription/TemplateWorkspace';
+import NodeGroups from '@/components/clash/subscription/NodeGroups';
+import TemplateInsert from '@/components/clash/subscription/TemplateInsert';
+import '@/components/clash/subscription/Templates.css';
 
-const injectionsSchema = z.object({
-  groups: z
-    .array(
-      z.object({
-        group: z.string(),
-        allNodes: z.boolean(),
-        nodes: z
-          .array(z.string())
-          .nullable()
-          .transform((v) => v ?? []),
-      }),
-    )
-    .nullable()
-    .transform((v) => v ?? []),
-  routes: z
-    .array(z.object({ ruleSetId: z.number(), target: z.string() }))
-    .nullable()
-    .transform((v) => v ?? []),
-  blacklists: z
-    .array(z.object({ ruleSetId: z.number(), node: z.string() }))
-    .nullable()
-    .transform((v) => v ?? []),
-});
-const schema = z.object({
-  id: z.number(),
-  name: z.string(),
-  content: z.string(),
-  groups: z.array(z.string()),
-  injections: injectionsSchema
-    .nullish()
-    .transform((v) => v ?? { groups: [], routes: [], blacklists: [] }),
-});
-type Template = z.infer<typeof schema>;
-const endpoint = '/panel/api/clash/templates';
-const key = ['clash', 'templates'];
 const empty: Template = {
   id: 0,
   name: '',
@@ -91,30 +60,14 @@ rules:
   - MATCH,节点选择
 `,
 };
-const ruleSchema = z.object({
-  code: z.string(),
-  filename: z.string(),
-  id: z.number(),
-  name: z.string(),
-  routing: z.boolean(),
-  blacklist: z.boolean(),
-});
-async function get(path: string) {
-  const r = await HttpUtil.get(path);
-  if (!r.success) throw new Error(r.msg);
-  return r.obj;
-}
 export default function Templates() {
-  const cache = useQueryClient();
+  const mutations = useClashTemplateMutations();
   const form = useForm<Template>({ defaultValues: empty });
   const draft = useWatch({ control: form.control }) as Template;
   const [mode, setMode] = useState<'edit' | 'view'>();
   const [chainValid, setChainValid] = useState(true);
   const [saving, setSaving] = useState(false);
-  const query = useQuery({
-    queryKey: key,
-    queryFn: async () => schema.array().parse(await get(endpoint)),
-  });
+  const query = useClashTemplates();
   const summaries = useMemo(
     () =>
       new Map(
@@ -150,19 +103,10 @@ export default function Templates() {
   );
   const colors = ['blue', 'purple', 'cyan', 'geekblue', 'magenta', 'green', 'orange'];
   async function removeTemplate(id: number) {
-    const response = await HttpUtil.delete(`${endpoint}/${id}`, { silent: true });
-    if (!response.success) {
-      void message.error(response.msg);
-      throw Error(response.msg);
-    }
-    await cache.invalidateQueries({ queryKey: key });
+    await mutations.remove.mutateAsync(id);
     void message.success('模板已删除');
   }
-  const rules = useQuery({
-    queryKey: ['clash', 'template-rules'],
-    enabled: !!mode,
-    queryFn: async () => ruleSchema.array().parse(await get('/panel/api/clash/rulesets')),
-  });
+  const rules = useClashRuleSets(!!mode);
   const parsed = useMemo(() => {
     try {
       const doc = parseDocument(draft.content);
@@ -203,6 +147,7 @@ export default function Templates() {
         key={mode + String(draft.id) + tab}
         onValidityChange={setChainValid}
         tab={tab}
+        entryClassName={tab === 'providers' ? () => 'template-entry-card' : undefined}
         content={draft.content}
         onChange={(v) => form.setValue('content', v)}
         groups={parsed.groups.map((g) => g.name)}
@@ -252,12 +197,7 @@ export default function Templates() {
     }
     setSaving(true);
     try {
-      const res = await HttpUtil.post(endpoint, form.getValues(), {
-        silent: true,
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.success) throw new Error(res.msg);
-      await cache.invalidateQueries({ queryKey: key });
+      await mutations.save.mutateAsync(form.getValues());
       setMode(undefined);
     } catch (e) {
       void message.error(String(e));
@@ -444,6 +384,7 @@ export default function Templates() {
                 children: (
                   <Space orientation="vertical" style={{ width: '100%' }}>
                     <NodeGroups
+                      entryClassName={() => 'template-entry-card'}
                       key={mode + String(draft.id)}
                       readonly={readonly}
                       invalid={!!parsed.error}

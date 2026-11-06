@@ -50,6 +50,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
 
+  // Project: share the login session with upstream authentication; prevent concurrent password submission.
   async function onPasskeyLogin() {
     setPasskeySubmitting(true);
     try {
@@ -268,9 +269,16 @@ export default function LoginPage() {
                     </Form.Item>
                   </Form>
                 </FormProvider>
-                <Button block size="large" icon={<KeyOutlined aria-hidden />} loading={passkeySubmitting}
-                  disabled={submitting || !passkeySupported()} onClick={onPasskeyLogin}
-                  title={!passkeySupported() ? t('passkey.unsupported') : undefined}>
+                {/* Project: offer WebAuthn in the existing login flow without a separate login page. */}
+                <Button
+                  block
+                  size="large"
+                  icon={<KeyOutlined aria-hidden />}
+                  loading={passkeySubmitting}
+                  disabled={submitting || !passkeySupported()}
+                  onClick={onPasskeyLogin}
+                  title={!passkeySupported() ? t('passkey.unsupported') : undefined}
+                >
                   {t('passkey.login')}
                 </Button>
               </div>

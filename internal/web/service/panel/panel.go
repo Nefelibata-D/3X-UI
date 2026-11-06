@@ -41,6 +41,7 @@ type PanelUpdateInfo struct {
 }
 
 const (
+	// Project: panel upgrades must retain the fork extensions; independent component sources stay upstream.
 	panelUpdaterURL      = "https://raw.githubusercontent.com/Nefelibata-D/3X-UI/main/update.sh"
 	maxPanelUpdaterBytes = 2 << 20
 	// devReleaseTag is the fixed-tag rolling pre-release the CI force-moves to the
@@ -431,6 +432,7 @@ func fetchLatestPanelVersion() (string, error) {
 // fetchPanelRelease fetches a release from GitHub. An empty tag resolves the
 // latest stable release; a non-empty tag (e.g. dev-latest) resolves that tag.
 func fetchPanelRelease(tag string) (*service.Release, error) {
+	// Project: query the same fork release source consumed by the panel updater.
 	url := "https://api.github.com/repos/Nefelibata-D/3X-UI/releases/latest"
 	if tag != "" {
 		url = "https://api.github.com/repos/Nefelibata-D/3X-UI/releases/tags/" + tag

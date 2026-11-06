@@ -131,6 +131,8 @@
     "saveQr": "ذخیره QR"
   },
   "menu": {
+    "loadBalancing": "Load balancing",
+    "clashSubscriptions": "Clash subscriptions",
     "theme": "تم",
     "dashboard": "نمای کلی",
     "inbounds": "ورودی‌ها",

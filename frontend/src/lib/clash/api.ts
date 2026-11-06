@@ -8,6 +8,7 @@ import {
   type ClientRatioView,
   type ClashOverview,
   type SyncStatus,
+  type RatioMode,
 } from '@/schemas/clash';
 
 const OVERVIEW = '/panel/api/clash/overview';
@@ -25,7 +26,7 @@ function requireObj<T>(msg: Msg<T>, context: string): T {
 
 export async function fetchClashOverview(): Promise<ClashOverview> {
   const msg = await HttpUtil.get(OVERVIEW, undefined, { silent: true });
-  return requireObj(parseMsg(msg, OverviewSchema, 'clash/overview'), 'clash/overview');
+  return requireObj(parseMsg(msg, OverviewSchema, 'clash/overview', { strict: true }), 'clash/overview');
 }
 
 export interface NodeWeightItem {
@@ -37,25 +38,22 @@ export interface NodeWeightItem {
 
 export async function saveClashWeights(items: NodeWeightItem[]): Promise<ClashOverview> {
   const msg = await HttpUtil.post(WEIGHTS, { items }, JSON_OPTIONS);
-  return requireObj(parseMsg(msg, OverviewSchema, 'clash/weights'), 'clash/weights');
+  return requireObj(parseMsg(msg, OverviewSchema, 'clash/weights', { strict: true }), 'clash/weights');
 }
 
 export async function fetchClashClientRatio(clientId: number): Promise<ClientRatioView> {
   const msg = await HttpUtil.get(`/panel/api/clash/clients/${clientId}`, undefined, {
     silent: true,
   });
-  return requireObj(
-    parseMsg(msg, ClientRatioViewSchema, 'clash/clients'),
-    'clash/clients',
-  );
+  return requireObj(parseMsg(msg, ClientRatioViewSchema, 'clash/clients', { strict: true }), 'clash/clients');
 }
 
 export async function saveClashClientRatio(
   clientId: number,
-  mode: 'inherit' | 'custom',
+  mode: RatioMode,
   weights: Record<string, number>,
   limits: Record<string, number>,
-  resetMode: "node" | "manual",
+  resetMode: 'node' | 'manual',
 ): Promise<ClientRatioView> {
   const msg = await HttpUtil.post(
     `/panel/api/clash/clients/${clientId}/ratio`,
@@ -63,7 +61,7 @@ export async function saveClashClientRatio(
     JSON_OPTIONS,
   );
   return requireObj(
-    parseMsg(msg, ClientRatioViewSchema, 'clash/clients/ratio'),
+    parseMsg(msg, ClientRatioViewSchema, 'clash/clients/ratio', { strict: true }),
     'clash/clients/ratio',
   );
 }
@@ -75,9 +73,9 @@ export async function resetClashPolicy(nodeKey: string, clientId: number): Promi
 
 export async function syncClashPolicies(): Promise<SyncStatus> {
   const msg = await HttpUtil.post(SYNC, undefined, { silent: true });
-  const parsed = parseMsg(msg, SyncStatusSchema, 'clash/sync');
+  const parsed = parseMsg(msg, SyncStatusSchema, 'clash/sync', { strict: true });
   if (!parsed.success) throw new Error(parsed.msg || 'clash/sync failed');
-  return parsed.obj ?? { status: 'ok', error: '', lastSync: 0, running: false };
+  return requireObj(parsed, 'clash/sync');
 }
 
 export function gbToBytes(gb: number | null | undefined): number {

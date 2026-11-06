@@ -1,6 +1,6 @@
-import * as monaco from "monaco-editor";
-import { proxyTypes } from "./templateSchema";
-import { isMap, isSeq, isScalar, parseDocument, stringify } from "yaml";
+import * as monaco from 'monaco-editor';
+import { proxyTypes } from '@/lib/clash/subscription/templateSchema';
+import { isMap, isSeq, isScalar, parseDocument, stringify } from 'yaml';
 import {
   builtins,
   groupTypes,
@@ -8,15 +8,15 @@ import {
   templateSymbols,
   type Slot,
   type SymbolKind,
-} from "./templateSymbols";
+} from '@/lib/clash/subscription/templateSymbols';
 
 const labels: Record<SymbolKind, string> = {
-  proxy: "代理或策略组",
-  ruleset: "规则集",
-  provider: "代理集合",
-  subrule: "子规则",
-  groupType: "策略组类型",
-  proxyType: "代理协议类型",
+  proxy: '代理或策略组',
+  ruleset: '规则集',
+  provider: '代理集合',
+  subrule: '子规则',
+  groupType: '策略组类型',
+  proxyType: '代理协议类型',
 };
 
 export function installTemplateReferences(
@@ -40,10 +40,8 @@ export function installTemplateReferences(
       if (!s.node.range) continue;
       const [a, b] = s.node.range;
       const raw = source.slice(a, b);
-      const quoted =
-        s.node.type === "QUOTE_DOUBLE" || s.node.type === "QUOTE_SINGLE";
-      if ((quoted ? raw.slice(1, -1) : raw) !== String(s.node.value ?? ""))
-        continue;
+      const quoted = s.node.type === 'QUOTE_DOUBLE' || s.node.type === 'QUOTE_SINGLE';
+      if ((quoted ? raw.slice(1, -1) : raw) !== String(s.node.value ?? '')) continue;
       const base = a + Number(quoted);
       ranges.set(
         s,
@@ -71,7 +69,14 @@ export function installTemplateReferences(
         const text = source.slice(start, end);
         const comma = text.indexOf(',');
         if (comma < 0) continue;
-        const target = hasTarget ? [...ranges].find(([slot]) => slot.node === node && !slot.declaration && (slot.kind === 'proxy' || slot.kind === 'subrule')) : undefined;
+        const target = hasTarget
+          ? [...ranges].find(
+              ([slot]) =>
+                slot.node === node &&
+                !slot.declaration &&
+                (slot.kind === 'proxy' || slot.kind === 'subrule'),
+            )
+          : undefined;
         const targetStart = target ? model.getOffsetAt(target[1].getStartPosition()) : end;
         paint(start, start + comma, 'type');
         paint(start + comma + 1, target ? targetStart - 1 : end, 'match');
@@ -82,9 +87,13 @@ export function installTemplateReferences(
     const subrules = doc.get('sub-rules');
     if (isMap(subrules)) for (const pair of subrules.items) colorRules(pair.value, true);
     const blacklist = doc.get('site-blacklist');
-    if (isSeq(blacklist)) for (const entry of blacklist.items) if (isMap(entry)) colorRules(entry.get('rules'), false);
+    if (isSeq(blacklist))
+      for (const entry of blacklist.items) if (isMap(entry)) colorRules(entry.get('rules'), false);
     const providers = doc.get('rule-providers');
-    if (isMap(providers)) for (const pair of providers.items) if (isMap(pair.value) && pair.value.get('behavior') === 'classical') colorRules(pair.value.get('payload'), false);
+    if (isMap(providers))
+      for (const pair of providers.items)
+        if (isMap(pair.value) && pair.value.get('behavior') === 'classical')
+          colorRules(pair.value.get('payload'), false);
     decorations.set([
       ...ruleColors,
       ...[...ranges]
@@ -102,33 +111,31 @@ export function installTemplateReferences(
   refresh();
   const at = (position: monaco.IPosition) =>
     [...ranges].find(([, range]) => range.containsPosition(position));
-  const selector = { language: "yaml", pattern: model.uri.path };
+  const selector = { language: 'yaml', pattern: model.uri.path };
   const completion = monaco.languages.registerCompletionItemProvider(selector, {
-    triggerCharacters: [",", ":", " "],
+    triggerCharacters: [',', ':', ' '],
     provideCompletionItems(current, position) {
       if (current !== model) return { suggestions: [] };
       const hit = at(position);
       if (!hit || hit[0].declaration) return { suggestions: [] };
       const [s, range] = hit;
       const values = new Set(
-        s.kind === "groupType"
+        s.kind === 'groupType'
           ? groupTypes
-          : s.kind === "proxyType"
+          : s.kind === 'proxyType'
             ? proxyTypes
             : names.get(s.kind),
       );
-      if (s.kind === "proxy") builtins.forEach((v) => values.add(v));
+      if (s.kind === 'proxy') builtins.forEach((v) => values.add(v));
       return {
         suggestions: [...values].map((value) => {
           let insertText = value;
-          if (s.node.type === "QUOTE_DOUBLE")
-            insertText = JSON.stringify(value).slice(1, -1);
-          else if (s.node.type === "QUOTE_SINGLE")
-            insertText = value.replaceAll("'", "''");
-          else if (s.start === 0 && s.end === String(s.node.value ?? "").length)
+          if (s.node.type === 'QUOTE_DOUBLE') insertText = JSON.stringify(value).slice(1, -1);
+          else if (s.node.type === 'QUOTE_SINGLE') insertText = value.replaceAll("'", "''");
+          else if (s.start === 0 && s.end === String(s.node.value ?? '').length)
             insertText = stringify(value, {
               lineWidth: 0,
-              collectionStyle: "flow",
+              collectionStyle: 'flow',
             }).trimEnd();
           return {
             label: value,
@@ -136,7 +143,7 @@ export function installTemplateReferences(
             kind: monaco.languages.CompletionItemKind.Reference,
             insertText,
             range,
-            sortText: "0" + value,
+            sortText: '0' + value,
           };
         }),
       };
@@ -149,8 +156,8 @@ export function installTemplateReferences(
         return { range: hit[1], text: hit[0].name };
       return {
         range: monaco.Range.fromPositions(position),
-        text: "",
-        rejectReason: "请选择本模板声明的名称或其引用",
+        text: '',
+        rejectReason: '请选择本模板声明的名称或其引用',
       };
     },
     provideRenameEdits(current, position, newName) {
@@ -162,12 +169,11 @@ export function installTemplateReferences(
         newName !== newName.trim() ||
         /[,():\r\n]/.test(newName) ||
         names.get(s.kind)?.has(newName) ||
-        (s.kind === "proxy" && builtins.includes(newName))
+        (s.kind === 'proxy' && builtins.includes(newName))
       )
-        return { edits: [], rejectReason: "请使用唯一且不含规则分隔符的名称" };
+        return { edits: [], rejectReason: '请使用唯一且不含规则分隔符的名称' };
       const doc = parseDocument(model.getValue());
-      if (doc.errors.length)
-        return { edits: [], rejectReason: "请先修复 YAML 语法" };
+      if (doc.errors.length) return { edits: [], rejectReason: '请先修复 YAML 语法' };
       replaceSymbol(templateSymbols(doc), s.kind, s.name, newName);
       return {
         edits: [
@@ -192,11 +198,7 @@ export function installTemplateReferences(
       e.shiftKey
     )
       return;
-    if (
-      e.keyCode !== monaco.KeyCode.Backspace &&
-      e.keyCode !== monaco.KeyCode.Delete
-    )
-      return;
+    if (e.keyCode !== monaco.KeyCode.Backspace && e.keyCode !== monaco.KeyCode.Delete) return;
     const selection = instance.getSelection();
     if (!selection || instance.getSelections()?.length !== 1) return;
     let remove: monaco.Range = selection;
@@ -204,12 +206,9 @@ export function installTemplateReferences(
       const hit = at(selection.getPosition());
       if (!hit) return;
       const [s, range] = hit;
-      if (s.declaration || !names.get(s.kind)?.has(s.name) || range.isEmpty())
-        return;
+      if (s.declaration || !names.get(s.kind)?.has(s.name) || range.isEmpty()) return;
       const boundary =
-        e.keyCode === monaco.KeyCode.Backspace
-          ? range.getStartPosition()
-          : range.getEndPosition();
+        e.keyCode === monaco.KeyCode.Backspace ? range.getStartPosition() : range.getEndPosition();
       if (selection.getPosition().equals(boundary)) return;
       remove = range;
     } else {
@@ -223,7 +222,7 @@ export function installTemplateReferences(
     e.preventDefault();
     e.stopPropagation();
     instance.pushUndoStop();
-    instance.executeEdits("remove-reference", [{ range: remove, text: "" }]);
+    instance.executeEdits('remove-reference', [{ range: remove, text: '' }]);
     instance.pushUndoStop();
   });
   const listener = model.onDidChangeContent(refresh);
@@ -235,4 +234,3 @@ export function installTemplateReferences(
     decorations.clear();
   };
 }
-

@@ -24,6 +24,7 @@ defaults:
 
 jobs:
   build:
+    if: github.repository == 'MHSanaei/3x-ui'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

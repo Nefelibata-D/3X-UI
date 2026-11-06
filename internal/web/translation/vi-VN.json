@@ -131,6 +131,8 @@
     "saveQr": "Lưu QR"
   },
   "menu": {
+    "loadBalancing": "Load balancing",
+    "clashSubscriptions": "Clash subscriptions",
     "theme": "Chủ đề",
     "dashboard": "Trạng thái hệ thống",
     "inbounds": "Inbound",

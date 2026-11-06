@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Dropdown, Tag } from 'antd';
 import { DeleteOutlined, ArrowDownOutlined, PlusOutlined } from '@ant-design/icons';
 import Sortable from 'sortablejs';
-import { templateDependencies, dependencyCycle } from './templateValidation';
-import './Templates.css';
+import { templateDependencies, dependencyCycle } from '@/lib/clash/subscription/templateValidation';
+import '@/components/clash/subscription/Templates.css';
 
 interface Props {
   content: string;
@@ -87,13 +87,15 @@ export default function ProxyChains({ content, readonly, onChange, onValidityCha
   }
   const list = useRef<HTMLDivElement>(null);
   const update = useRef<(from: number, to: number) => void>(() => {});
-  update.current = (from, to) => {
-    if (from === to || from < 0 || to < 0 || from >= chain.length || to >= chain.length) return;
-    const next = [...chain];
-    const [name] = next.splice(from, 1);
-    next.splice(to, 0, name);
-    apply(next);
-  };
+  useEffect(() => {
+    update.current = (from, to) => {
+      if (from === to || from < 0 || to < 0 || from >= chain.length || to >= chain.length) return;
+      const next = [...chain];
+      const [name] = next.splice(from, 1);
+      next.splice(to, 0, name);
+      apply(next);
+    };
+  });
   useEffect(() => {
     if (!list.current || !editable) return;
     let next: Element | null = null;
@@ -183,7 +185,7 @@ export default function ProxyChains({ content, readonly, onChange, onValidityCha
               <Button
                 type="text"
                 danger
-                icon={<DeleteOutlined />}
+                icon={<DeleteOutlined aria-hidden />}
                 aria-label={'移除 ' + name}
                 onClick={() => apply(chain.filter((n) => n !== name))}
               />
@@ -191,7 +193,7 @@ export default function ProxyChains({ content, readonly, onChange, onValidityCha
           </div>
           {index < chain.length - 1 && (
             <div className="proxy-chain-arrow">
-              <ArrowDownOutlined />
+              <ArrowDownOutlined aria-hidden />
             </div>
           )}
         </div>

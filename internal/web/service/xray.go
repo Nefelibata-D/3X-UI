@@ -481,7 +481,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		injectNodeEgresses(xrayConfig, nodes)
 	}
 
-	// Project gateway routing is injected after every upstream route/outbound
+	// Project: gateway routing is injected after every upstream route/outbound
 	// so managed inbounds cannot be captured by an earlier user rule.
 	if err := clash.InjectXrayConfig(xrayConfig); err != nil {
 		return nil, err

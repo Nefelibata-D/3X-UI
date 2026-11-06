@@ -131,6 +131,8 @@
     "saveQr": "QR を保存"
   },
   "menu": {
+    "loadBalancing": "Load balancing",
+    "clashSubscriptions": "Clash subscriptions",
     "theme": "テーマ",
     "dashboard": "ダッシュボード",
     "inbounds": "インバウンド",

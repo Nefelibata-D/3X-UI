@@ -1,5 +1,6 @@
 @import '@fontsource-variable/jetbrains-mono/wght.css';
 
+/* Project: one code typography contract for existing editors and project subscription components. */
 :root {
   --panel-code-font: 'JetBrains Mono Variable', monospace;
   --panel-code-size: 14px;

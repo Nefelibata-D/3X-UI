@@ -212,6 +212,7 @@ export default defineConfig({
   },
   experimental: {
     renderBuiltUrl(filename, { hostType }) {
+      // Project: bundled font URLs must also resolve when the panel uses a non-root base path.
       if (hostType === 'css') return { relative: true };
       if (hostType === 'js') {
         return {
@@ -288,6 +289,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
+      // Project: published rule files share the backend proxy with the existing panel routes.
       '^/(?:[^/]+/)?(login|logout|getTwoFactorEnable|csrf-token|rulesets|sponsors|panel|server)(?:/|$)': makeBackendProxy(BACKEND_TARGET),
       '^/$': makeBackendProxy(BACKEND_TARGET),
       '^/[^/]+/$': makeBackendProxy(BACKEND_TARGET),

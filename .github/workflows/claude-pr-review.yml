@@ -14,14 +14,7 @@ jobs:
   # the model: `prepare` before it, `post` after it.
   prepare:
     if: >-
-      (github.event_name == 'pull_request_target'
-       && github.event.pull_request.user.type != 'Bot'
-       && !github.event.pull_request.draft)
-      || (github.event_name == 'issue_comment'
-          && github.event.issue.pull_request
-          && github.event.issue.state == 'open'
-          && startsWith(github.event.comment.body, '@claude review')
-          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+      github.repository == 'MHSanaei/3x-ui' && ((github.event_name == 'pull_request_target' && github.event.pull_request.user.type != 'Bot' && !github.event.pull_request.draft) || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.state == 'open' && startsWith(github.event.comment.body, '@claude review') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -89,7 +82,8 @@ jobs:
   # /tmp/review.md and the `post` job, which runs no model, publishes it.
   review:
     needs: prepare
-    if: needs.prepare.outputs.done != 'true'
+    if: >-
+      github.repository == 'MHSanaei/3x-ui' && (needs.prepare.outputs.done != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -334,7 +328,8 @@ jobs:
   # review job left, so its write token never sits beside pull-request code.
   post:
     needs: [prepare, review]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.done != 'true' && needs.review.result != 'cancelled' }}
+    if: >-
+      github.repository == 'MHSanaei/3x-ui' && (!cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.done != 'true' && needs.review.result != 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

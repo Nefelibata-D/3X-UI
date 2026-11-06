@@ -6,6 +6,7 @@ on:
 
 jobs:
   cleanup:
+    if: github.repository == 'MHSanaei/3x-ui'
     runs-on: ubuntu-latest
     permissions:
       actions: write

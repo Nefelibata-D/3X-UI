@@ -372,6 +372,7 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
             ),
           },
           {
+            // Project: keep credential management inside the existing security settings.
             key: 'passkeys',
             label: catTabLabel(<SafetyOutlined aria-hidden />, t('passkey.title'), isMobile),
             children: <PasskeyTab />,

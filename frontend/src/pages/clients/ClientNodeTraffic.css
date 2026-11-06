@@ -2,10 +2,10 @@
 .client-node-traffic-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .client-node-traffic-name { width: 64px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .client-node-traffic-row .client-traffic-cell { flex: 1; min-width: 150px; }
-.client-node-traffic-row .client-traffic-cell-used,
-.client-node-traffic-row .client-traffic-cell-limit { flex: 0 0 auto; min-width: 0; }
-.client-node-traffic-row .client-traffic-cell-used,
-.client-node-traffic-row .client-traffic-cell-limit { flex: 0 0 56px; min-width: 56px; }
+/* Project: compact node rows must not change the upstream client table widths. */
+.client-node-traffic-row .client-traffic-cell.is-compact .client-traffic-cell-used,
+.client-node-traffic-row .client-traffic-cell.is-compact .client-traffic-cell-limit { flex: 0 0 56px; min-width: 56px; }
+.client-node-traffic-row .client-traffic-cell-infinity { justify-content: center; width: 100%; }
 .client-node-traffic-row .client-traffic-cell-used { text-align: center; }
 .client-node-traffic-row .client-traffic-cell-limit { text-align: center; }
 .client-node-traffic-row .client-traffic-cell-bar { flex: 1; width: auto; }

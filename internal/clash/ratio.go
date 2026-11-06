@@ -19,11 +19,6 @@ type RatioResult struct {
 	Included bool
 }
 
-type BudgetWeight struct {
-	Key         string
-	BudgetBytes int64
-}
-
 func NormalizeWeights(items []WeightInput) ([]RatioResult, error) {
 	var sum int64
 	for _, item := range items {
@@ -49,15 +44,4 @@ func NormalizeWeights(items []WeightInput) ([]RatioResult, error) {
 		}
 	}
 	return out, nil
-}
-
-func BudgetWeights(items []BudgetWeight) []WeightInput {
-	out := make([]WeightInput, 0, len(items))
-	for _, item := range items {
-		if item.BudgetBytes <= 0 {
-			continue
-		}
-		out = append(out, WeightInput{Key: item.Key, Weight: item.BudgetBytes})
-	}
-	return out
 }

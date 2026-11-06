@@ -837,6 +837,7 @@ func FilterNodeSnapshot(n *model.Node, snap *runtime.TrafficSnapshot) {
 }
 
 func (s *NodeService) Delete(id int) error {
+	// Project: wait for node sync and policy work before detaching the master-side records.
 	nodeSyncLifecycle.Lock()
 	defer nodeSyncLifecycle.Unlock()
 	release := clash.LockNodeRemoval()
@@ -856,6 +857,7 @@ func (s *NodeService) Delete(id int) error {
 	// the ordering already matches a future ON DELETE constraint. Delete stays
 	// tolerant of a missing node row so it can still clean up orphaned baselines.
 	if err := runSerializedTx(func(tx *gorm.DB) error {
+		// Project: intentionally allow removal with inbounds; preserve remote inbounds and client traffic totals.
 		if err := detachNodeInbounds(tx, id); err != nil {
 			return err
 		}

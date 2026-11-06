@@ -1,13 +1,13 @@
 import { isMap, isSeq, parseDocument, stringify } from 'yaml';
-import { templateSymbols } from './templateSymbols';
+import { templateSymbols } from '@/lib/clash/subscription/templateSymbols';
 import {
   composeSubscription,
   documentObject,
   entries,
   setEntries,
   subscriptionFromYAML,
-  type Subscription,
-} from './subscriptionModel';
+} from '@/lib/clash/subscription/subscriptionModel';
+import { type Subscription } from '@/schemas/clash/subscription';
 
 export function deleteSubscriptionGroup(base: string, binding: Subscription, name: string) {
   const overlay = documentObject(binding.content);

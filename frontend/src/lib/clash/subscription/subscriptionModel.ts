@@ -100,11 +100,13 @@ export function subscriptionFromYAML(
   binding: Subscription,
 ): Subscription {
   const original = documentObject(base),
-    edited = documentObject(content);
+    edited = documentObject(content),
+    previous = documentObject(binding.content);
   let overlay: Record<string, unknown> = {};
   const next = { ...binding };
   for (const section of ['rules', 'rule-providers', 'proxy-groups'] as const) {
     const inherited = new Map(entries(original, section));
+    const explicit = new Set(entries(previous, section).map(([id]) => id));
     const rows = entries(edited, section);
     next[disabledField[section]] = [...inherited.keys()].filter(
       (id) => !rows.some(([key]) => key === id),
@@ -113,13 +115,15 @@ export function subscriptionFromYAML(
       overlay,
       section,
       rows.filter(
-        ([id, value]) => !inherited.has(id) || stringify(inherited.get(id)) !== stringify(value),
+        ([id, value]) =>
+          explicit.has(id) || !inherited.has(id) || stringify(inherited.get(id)) !== stringify(value),
       ),
     );
   }
   for (const key of new Set([...Object.keys(original), ...Object.keys(edited)])) {
     if (['rules', 'rule-providers', 'proxy-groups'].includes(key)) continue;
-    if (stringify(original[key]) !== stringify(edited[key])) overlay[key] = edited[key] ?? null;
+    if (Object.hasOwn(previous, key) || stringify(original[key]) !== stringify(edited[key]))
+      overlay[key] = edited[key] ?? null;
   }
   next.content = stringify(overlay);
   return next;

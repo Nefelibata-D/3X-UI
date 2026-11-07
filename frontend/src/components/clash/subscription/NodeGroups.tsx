@@ -4,7 +4,7 @@ import SortableTemplateRow, {
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, Button, Input, Select, Space, Tag } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isSeq, parseDocument } from 'yaml';
 
 import { dependencyCycle, templateDependencies } from '@/lib/clash/subscription/templateValidation';
@@ -220,6 +220,16 @@ export default function NodeGroups({
                   : draft.nodes.map((key) => JSON.stringify(['node', key]))),
               ]}
               showSearch={{ optionFilterProp: 'label' }}
+              menuItemSelectedIcon={({ isSelected }) => (
+                <CheckOutlined
+                  aria-hidden
+                  style={{
+                    width: 20,
+                    marginInlineStart: 4,
+                    visibility: isSelected ? 'visible' : 'hidden',
+                  }}
+                />
+              )}
               optionRender={(option) => renderMember(option.label, option.value, true)}
               labelRender={({ label, value }) => renderMember(label ?? value, value)}
               options={[

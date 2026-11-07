@@ -50,7 +50,7 @@ export default function LoadBalance(props: Props) {
           {!props.readonly && (
             <Button
               type="primary"
-              disabled={stale || pendingRule || editing.content === editing.original}
+              disabled={stale || pendingRule}
               onClick={() => {
                 const errors = loadBalanceErrors(editing.content);
                 if (errors.length) {

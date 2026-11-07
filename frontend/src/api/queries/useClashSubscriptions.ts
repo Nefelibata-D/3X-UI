@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { keys } from '@/api/queryKeys';
-import { useClashClientRatioQuery } from './useClashClientRatioQuery';
+import {
+  subscriptionInboundOptions,
+  expandLegacyNodeBindings,
+} from '@/lib/clash/subscription/subscriptionInbounds';
 import * as api from '@/lib/clash/subscription/api';
 import type { Subscription } from '@/schemas/clash/subscription';
 
@@ -23,19 +26,18 @@ export function useClashSubscription(id: number | undefined) {
   });
   const templates = useClashTemplates();
   const rules = useClashRuleSets();
-  const ratio = useClashClientRatioQuery(id);
-  const queries = [binding, proxies, templates, rules, ratio];
+  const queries = [binding, proxies, templates, rules];
   return {
     isPending: queries.some((query) => query.isPending),
     error: !id ? new Error('客户端没有有效 ID') : queries.find((query) => query.error)?.error,
     data:
-      binding.data && proxies.data && templates.data && rules.data && ratio.data
+      binding.data && proxies.data && templates.data && rules.data
         ? {
-            binding: binding.data,
+            binding: expandLegacyNodeBindings(binding.data, proxies.data),
             proxies: proxies.data,
             templates: templates.data,
             rules: rules.data,
-            nodes: ratio.data.nodes.filter((node) => node.selectable),
+            inbounds: subscriptionInboundOptions(proxies.data),
           }
         : undefined,
   };

@@ -16,11 +16,12 @@ import {
 } from '@/lib/clash/subscription/templateSymbols';
 type Binding = { group: string; allNodes: boolean; nodes: string[] };
 interface Props {
-  nodeOptions?: { nodeKey: string; name: string }[];
+  inboundOptions?: { inboundKey: string; name: string; hostOverride: boolean }[];
   onRemove?: (name: string) => void;
   entryActions?: (name: string) => ReactNode;
   entryClassName?: (name: string) => string;
   content: string;
+  referenceContent?: string;
   groups: { name: string; type: string }[];
   bindings: Binding[];
   readonly: boolean;
@@ -29,6 +30,7 @@ interface Props {
 }
 export default function NodeGroups({
   content,
+  referenceContent = content,
   groups,
   bindings,
   readonly,
@@ -37,10 +39,11 @@ export default function NodeGroups({
   entryActions,
   entryClassName,
   onRemove,
-  nodeOptions,
+  inboundOptions,
 }: Props) {
   const uid = useId();
   const dependencies = templateDependencies(content).nodes;
+  const referenceNodes = templateDependencies(referenceContent).nodes;
   const [draft, setDraft] = useState<{
     original: string;
     key?: string;
@@ -89,11 +92,11 @@ export default function NodeGroups({
           groups.some((g) => g.name === name && name !== draft.key) ||
           (isSeq(proxies) && proxies.items.some((p) => isMap(p) && p.get('name') === name)))
       )
-        throw Error('请使用唯一的策略组名称');
+        throw Error('请使用唯一的代理组名称');
       const replacement = draft.remove ? draft.replacement : name;
       if (draft.key) {
         const idx = seq.items.findIndex((g) => isMap(g) && g.get('name') === draft.key);
-        if (idx < 0) throw Error('策略组不存在');
+        if (idx < 0) throw Error('代理组不存在');
         if (draft.remove) seq.delete(idx);
         else doc.setIn(['proxy-groups', idx, 'proxies'], draft.members);
         if (draft.key !== replacement)
@@ -111,7 +114,7 @@ export default function NodeGroups({
       let next = draft.remove
         ? bindings.filter((b) => b.group !== draft.key)
         : bindings.map((b) => (b.group === draft.key ? { ...b, group: name } : b));
-      if (nodeOptions && !draft.remove)
+      if (inboundOptions && !draft.remove)
         next = [
           ...next.filter((b) => b.group !== name),
           { group: name, nodes: draft.nodes, allNodes: draft.allNodes },
@@ -144,12 +147,12 @@ export default function NodeGroups({
             <Input
               id={uid + '-name'}
               value={draft.name}
-              placeholder="策略组名称"
+              placeholder="代理组名称"
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
           </label>
           <label htmlFor={uid + '-members'}>
-            节点
+            代理
             <Select
               id={uid + '-members'}
               mode="multiple"
@@ -159,26 +162,55 @@ export default function NodeGroups({
                   ? [JSON.stringify(['all', '*'])]
                   : draft.nodes.map((key) => JSON.stringify(['node', key]))),
               ]}
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
+              optionRender={(option) => {
+                const inbound = inboundOptions?.find(
+                  (item) => JSON.stringify(['node', item.inboundKey]) === option.value,
+                );
+                return (
+                  <Space size={6}>
+                    {option.label}
+                    {inbound?.hostOverride && <Tag color="blue">主机覆盖</Tag>}
+                  </Space>
+                );
+              }}
+              labelRender={({ label, value }) => {
+                const inbound = inboundOptions?.find(
+                  (item) => JSON.stringify(['node', item.inboundKey]) === value,
+                );
+                return (
+                  <Space size={6}>
+                    {label ?? value}
+                    {inbound?.hostOverride && <Tag color="blue">主机覆盖</Tag>}
+                  </Space>
+                );
+              }}
               options={[
                 {
-                  label: '预设节点',
+                  label: '预设代理',
                   options: builtins.map((name) => ({
                     value: JSON.stringify(['member', name]),
                     label: name,
                   })),
                 },
                 {
-                  label: '自定义节点',
+                  label: '自定义代理',
                   options: [
-                    ...[...new Set(draft.members.filter((name) => !builtins.includes(name)))].map(
-                      (name) => ({ value: JSON.stringify(['member', name]), label: name }),
-                    ),
-                    ...(nodeOptions
+                    ...[
+                      ...new Set([
+                        ...referenceNodes
+                          .filter((node) => node.kind !== 'group' || node.name !== draft.key)
+                          .map((node) => node.name),
+                        ...draft.members,
+                      ]),
+                    ]
+                      .filter((name) => !builtins.includes(name))
+                      .map((name) => ({ value: JSON.stringify(['member', name]), label: name })),
+                    ...(inboundOptions
                       ? [
-                          { value: JSON.stringify(['all', '*']), label: '全部已分配节点' },
-                          ...nodeOptions.map((node) => ({
-                            value: JSON.stringify(['node', node.nodeKey]),
+                          { value: JSON.stringify(['all', '*']), label: '全部已分配代理' },
+                          ...inboundOptions.map((node) => ({
+                            value: JSON.stringify(['node', node.inboundKey]),
                             label: node.name,
                           })),
                         ]
@@ -198,7 +230,7 @@ export default function NodeGroups({
                     : selected.filter(([kind]) => kind === 'node').map(([, value]) => value),
                 });
               }}
-              placeholder={nodeOptions ? '选择节点' : '留空，等待客户端注入'}
+              placeholder={inboundOptions ? '选择代理' : '留空，等待客户端注入'}
             />
           </label>
           <label htmlFor={uid + '-type'}>
@@ -219,7 +251,7 @@ export default function NodeGroups({
         <Space>
           <Button onClick={() => setDraft(undefined)}>取消</Button>
           <Button type="primary" danger={draft.remove} disabled={invalid} onClick={apply}>
-            {draft.remove ? '移除策略组' : '确定'}
+            {draft.remove ? '移除代理组' : '确定'}
           </Button>
         </Space>
       </div>
@@ -285,7 +317,7 @@ export default function NodeGroups({
           disabled={invalid}
           onClick={() => open()}
         >
-          添加策略组
+          添加代理组
         </Button>
       )}
       {draft && !draft.key && editor}

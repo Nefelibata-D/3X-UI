@@ -82,6 +82,9 @@ export const subscriptionProxySchema = z.object({
   name: z.string(),
   type: z.string(),
   nodeKey: z.string(),
+  inboundKey: z.string(),
+  inboundName: z.string(),
+  hostOverride: z.boolean(),
   config: z.record(z.string(), z.unknown()),
 });
 export type SubscriptionProxy = z.infer<typeof subscriptionProxySchema>;

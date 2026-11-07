@@ -260,7 +260,7 @@ export default function Templates() {
             },
           },
           {
-            title: '负载均衡节点组',
+            title: '负载均衡代理组',
             render: (_, r) => {
               const summary = summaries.get(r.id);
               return summary?.balance.length ? (
@@ -380,7 +380,7 @@ export default function Templates() {
             items={[
               {
                 key: 'groups',
-                label: '节点',
+                label: '代理组',
                 children: (
                   <Space orientation="vertical" style={{ width: '100%' }}>
                     <NodeGroups
@@ -494,7 +494,7 @@ export default function Templates() {
                     {!!draft.injections.blacklists.length && (
                       <Alert
                         type="warning"
-                        title="此模板含旧版黑名单绑定，请根据原有配置在节点组下重新设置。旧数据已保留。"
+                        title="此模板含旧版黑名单绑定，请根据原有配置在代理组下重新设置。旧数据已保留。"
                       />
                     )}
                     <LoadBalance

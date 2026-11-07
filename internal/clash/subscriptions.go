@@ -99,17 +99,26 @@ func SaveClientSubscription(clientID int, row *SubscriptionBinding) error {
 		return err
 	}
 	authorized := cat.AuthorizedNodeKeys(clientID)
+	if client, ok := cat.ClientByID(clientID); ok {
+		for _, id := range client.InboundIDs {
+			if inbound, exists := cat.InboundByID(id); exists {
+				if _, exists := cat.NodeByKey(inbound.NodeKey); exists {
+					authorized = append(authorized, InboundKey(id))
+				}
+			}
+		}
+	}
 	for _, binding := range row.Groups {
 		if _, ok := groups[binding.Group]; !ok || seen[binding.Group] {
-			return errors.New("注入节点组不存在或重复")
+			return errors.New("注入代理组不存在或重复")
 		}
 		seen[binding.Group] = true
 		if binding.AllNodes && len(binding.Nodes) > 0 {
-			return errors.New("全部节点与指定节点不能同时选择")
+			return errors.New("全部代理与指定代理不能同时选择")
 		}
 		for _, key := range binding.Nodes {
 			if !slices.Contains(authorized, key) {
-				return errors.New("注入节点不在客户端授权范围内")
+				return errors.New("注入代理不在客户端授权范围内")
 			}
 		}
 	}
@@ -343,7 +352,7 @@ func validateSubscriptionGraph(groups map[string]map[string]any) error {
 	return nil
 }
 
-func RenderSubscription(subID string, proxies []map[string]any, nodeKeys map[string]string) (map[string]any, bool, error) {
+func RenderSubscription(subID string, proxies []map[string]any, nodeKeys map[string]string, inboundKeys ...map[string]string) (map[string]any, bool, error) {
 	db, err := dbOrErr()
 	if err != nil {
 		return nil, false, err
@@ -358,10 +367,10 @@ func RenderSubscription(subID string, proxies []map[string]any, nodeKeys map[str
 	if err != nil {
 		return nil, true, err
 	}
-	return RenderSubscriptionBinding(binding, proxies, nodeKeys)
+	return RenderSubscriptionBinding(binding, proxies, nodeKeys, inboundKeys...)
 }
 
-func RenderSubscriptionBinding(binding SubscriptionBinding, proxies []map[string]any, nodeKeys map[string]string) (map[string]any, bool, error) {
+func RenderSubscriptionBinding(binding SubscriptionBinding, proxies []map[string]any, nodeKeys map[string]string, inboundKeys ...map[string]string) (map[string]any, bool, error) {
 	db, err := dbOrErr()
 	if err != nil {
 		return nil, true, err
@@ -383,7 +392,7 @@ func RenderSubscriptionBinding(binding SubscriptionBinding, proxies []map[string
 		name, _ := proxy["name"].(string)
 		include := false
 		for _, injection := range binding.Groups {
-			if injection.AllNodes || slices.Contains(injection.Nodes, nodeKeys[name]) {
+			if injectionIncludes(injection, name, nodeKeys, inboundKeys) {
 				include = true
 			}
 		}
@@ -411,12 +420,12 @@ func RenderSubscriptionBinding(binding SubscriptionBinding, proxies []map[string
 	for _, injection := range binding.Groups {
 		group := groups[injection.Group]
 		if group == nil {
-			return nil, true, fmt.Errorf("注入节点组不存在：%s", injection.Group)
+			return nil, true, fmt.Errorf("注入代理组不存在：%s", injection.Group)
 		}
 		members, _ := group["proxies"].([]any)
 		for _, proxy := range proxies {
 			name, _ := proxy["name"].(string)
-			if injection.AllNodes || slices.Contains(injection.Nodes, nodeKeys[name]) {
+			if injectionIncludes(injection, name, nodeKeys, inboundKeys) {
 				found := false
 				for _, member := range members {
 					if member == name {
@@ -456,4 +465,15 @@ func RecordClientSubscriptionSync(subID, userAgent string) error {
 		return err
 	}
 	return db.Table((SubscriptionBinding{}).TableName()).Where("sub_id = ?", subID).UpdateColumn("last_sync_at", time.Now().UnixMilli()).Error
+}
+
+// InboundKey identifies the official inbound independently of its name or server.
+func InboundKey(id int) string { return fmt.Sprintf("inbound:%d", id) }
+
+// Server keys remain readable for existing bindings; new editors select inbound keys.
+func injectionIncludes(injection TemplateGroupInjection, name string, nodeKeys map[string]string, inboundKeys []map[string]string) bool {
+	if injection.AllNodes || slices.Contains(injection.Nodes, nodeKeys[name]) {
+		return true
+	}
+	return len(inboundKeys) > 0 && inboundKeys[0][name] != "" && slices.Contains(injection.Nodes, inboundKeys[0][name])
 }

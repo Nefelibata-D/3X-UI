@@ -9,8 +9,11 @@ import (
 )
 
 type projectProxySource struct {
-	proxy   map[string]any
-	nodeKey string
+	proxy        map[string]any
+	nodeKey      string
+	inboundKey   string
+	inboundName  string
+	hostOverride bool
 }
 type projectSubscription struct {
 	binding *clash.SubscriptionBinding
@@ -32,12 +35,20 @@ func (s *SubClashService) ProjectSubscription(subID, host string, binding *clash
 }
 func (p *projectSubscription) proxies(s *SubClashService, req *SubService, inbound *model.Inbound, client model.Client, host string) []map[string]any {
 	items := s.getProxies(req, inbound, client, host)
+	endpoints, _ := unmarshalStreamSettings(inbound.StreamSettings)["externalProxy"].([]any)
+	hostOverride := false
+	for _, value := range endpoints {
+		if endpoint, ok := value.(map[string]any); ok && isHostEndpoint(endpoint) {
+			hostOverride = true
+			break
+		}
+	}
 	key := clash.LocalNodeKey
 	if inbound.NodeID != nil {
 		key = clash.NodeKey(*inbound.NodeID)
 	}
 	for _, item := range items {
-		p.sources = append(p.sources, projectProxySource{item, key})
+		p.sources = append(p.sources, projectProxySource{item, key, clash.InboundKey(inbound.Id), inbound.Remark, hostOverride})
 	}
 	return items
 }
@@ -46,9 +57,15 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 		return "", false, nil
 	}
 	nodeKeys := make(map[string]string, len(p.sources))
+	inboundKeys := make(map[string]string, len(p.sources))
+	inboundNames := make(map[string]string, len(p.sources))
+	hostOverrides := make(map[string]bool, len(p.sources))
 	for _, source := range p.sources {
 		name, _ := source.proxy["name"].(string)
 		nodeKeys[name] = source.nodeKey
+		inboundKeys[name] = source.inboundKey
+		inboundNames[name] = source.inboundName
+		hostOverrides[name] = source.hostOverride
 	}
 	actual := make([]map[string]any, 0, len(proxies))
 	for _, proxy := range proxies {
@@ -59,7 +76,11 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 	if p.inspect {
 		items := make([]map[string]any, 0, len(actual))
 		for _, proxy := range actual {
-			items = append(items, map[string]any{"name": proxy["name"], "type": proxy["type"], "nodeKey": nodeKeys[fmt.Sprint(proxy["name"])], "config": proxy})
+			name := fmt.Sprint(proxy["name"])
+			items = append(items, map[string]any{
+				"name": name, "type": proxy["type"], "config": proxy,
+				"nodeKey": nodeKeys[name], "inboundKey": inboundKeys[name], "inboundName": inboundNames[name], "hostOverride": hostOverrides[name],
+			})
 		}
 		body, err := yaml.Marshal(items)
 		return string(body), true, err
@@ -68,9 +89,9 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 	var bound bool
 	var err error
 	if p.binding != nil {
-		config, bound, err = clash.RenderSubscriptionBinding(*p.binding, actual, nodeKeys)
+		config, bound, err = clash.RenderSubscriptionBinding(*p.binding, actual, nodeKeys, inboundKeys)
 	} else {
-		config, bound, err = clash.RenderSubscription(subID, actual, nodeKeys)
+		config, bound, err = clash.RenderSubscription(subID, actual, nodeKeys, inboundKeys)
 	}
 	if err != nil {
 		return "", true, err

@@ -77,7 +77,7 @@ function SubscriptionEditor({
     proxies: SubscriptionProxy[];
     binding: Subscription;
     templates: Template[];
-    nodes: { nodeKey: string; name: string }[];
+    inbounds: { inboundKey: string; name: string; hostOverride: boolean }[];
     rules: RuleSet[];
   };
 }) {
@@ -127,7 +127,7 @@ function SubscriptionEditor({
           ...new Set([
             ...members,
             ...data.proxies
-              .filter((p) => injection?.allNodes || injection?.nodes.includes(p.nodeKey))
+              .filter((p) => injection?.allNodes || injection?.nodes.includes(p.inboundKey))
               .map((p) => p.name),
           ]),
         ],
@@ -136,7 +136,7 @@ function SubscriptionEditor({
   );
   const selectedProxies = data.proxies.filter(
     (p) =>
-      draft.groups.some((g) => g.allNodes || g.nodes.includes(p.nodeKey)) ||
+      draft.groups.some((g) => g.allNodes || g.nodes.includes(p.inboundKey)) ||
       Object.entries(draft.dialers).some(
         ([source, target]) => !!target && (source === p.name || target === p.name),
       ),
@@ -214,10 +214,10 @@ function SubscriptionEditor({
         return;
       }
       modal.confirm({
-        title: `删除节点组「${name}」及其引用？`,
+        title: `删除代理组「${name}」及其引用？`,
         content: (
           <div>
-            <p>以下引用将一并删除，不会改为直连。其他节点组若因此为空，需要重新配置成员。</p>
+            <p>以下引用将一并删除，不会改为直连。其他代理组若因此为空，需要重新配置成员。</p>
             <ul
               style={{
                 maxHeight: '40vh',
@@ -231,7 +231,7 @@ function SubscriptionEditor({
             </ul>
           </div>
         ),
-        okText: '删除节点组及引用',
+        okText: '删除代理组及引用',
         cancelText: '取消',
         okButtonProps: { danger: true },
         onOk: apply,
@@ -310,7 +310,7 @@ function SubscriptionEditor({
                   ? '关闭负载均衡'
                   : '开启负载均衡'
               }
-              title="切换负载均衡，保留节点组"
+              title="切换负载均衡，保留代理组"
               icon={<StopOutlined aria-hidden />}
               onClick={() => toggleBalance(id)}
             />
@@ -442,7 +442,7 @@ function SubscriptionEditor({
         const missing = report.pending.filter(
           (name) => !draft.groups.some((g) => g.group === name && (g.allNodes || g.nodes.length)),
         );
-        if (missing.length) throw new Error('请为节点组配置注入：' + missing.join('、'));
+        if (missing.length) throw new Error('请为代理组配置注入：' + missing.join('、'));
       }
       await saveMutation.mutateAsync(draft);
       void message.success('订阅配置已保存');
@@ -526,7 +526,7 @@ function SubscriptionEditor({
           try {
             const edited = documentObject(content);
             if (JSON.stringify(edited.proxies) !== JSON.stringify(previewProxies))
-              throw new Error('节点协议配置由 3x-ui 官方订阅生成，请在节点管理中修改');
+              throw new Error('代理协议配置由 3x-ui 官方订阅生成，请在入站管理中修改');
             if ('proxies' in combined) edited.proxies = combined.proxies;
             else delete edited.proxies;
             for (const [name, value] of entries(edited, 'proxy-groups')) {
@@ -543,7 +543,7 @@ function SubscriptionEditor({
                 (!Array.isArray(group.proxies) ||
                   generated.some((member) => !(group.proxies as unknown[]).includes(member)))
               )
-                throw new Error('已分配节点由节点组选择生成，请在右侧节点编辑中调整');
+                throw new Error('已分配代理由代理组选择生成，请在右侧代理组编辑中调整');
               if (Array.isArray(group.proxies))
                 group.proxies = group.proxies.filter(
                   (member) => !generated.includes(String(member)),
@@ -568,7 +568,7 @@ function SubscriptionEditor({
             { key: 'subscription', label: '订阅设置', children: settings },
             {
               key: 'groups',
-              label: '节点',
+              label: '代理组',
               disabled: !template,
               children:
                 source === 'template' ? (
@@ -577,11 +577,12 @@ function SubscriptionEditor({
                   <>
                     <NodeGroups
                       content={draft.content}
+                      referenceContent={composed}
                       entryClassName={() => 'subscription-node-card'}
                       onRemove={removeGroup}
                       groups={customGroups}
                       bindings={draft.groups}
-                      nodeOptions={data.nodes}
+                      inboundOptions={data.inbounds}
                       readonly={false}
                       invalid={!!compositionError}
                       change={(content, bindings) => {

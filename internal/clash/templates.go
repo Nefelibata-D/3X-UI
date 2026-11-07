@@ -88,6 +88,17 @@ func SaveTemplate(t *YAMLTemplate) error {
 	if err := t.parse(); err != nil {
 		return err
 	}
+	var config map[string]any
+	if err := yaml.Unmarshal([]byte(t.Content), &config); err != nil {
+		return err
+	}
+	groups, err := subscriptionGroups(config)
+	if err != nil {
+		return err
+	}
+	if err := validateSubscriptionGraph(groups); err != nil {
+		return err
+	}
 	db, err := dbOrErr()
 	if err != nil {
 		return err

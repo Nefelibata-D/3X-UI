@@ -3,11 +3,11 @@ import SortableTemplateRow, {
 } from '@/components/clash/subscription/SortableTemplateRow';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
-import { message, Button, Input, Select, Space, Tag } from 'antd';
+import { Alert, Button, Input, Select, Space, Tag } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isSeq, parseDocument } from 'yaml';
 
-import { templateDependencies } from '@/lib/clash/subscription/templateValidation';
+import { dependencyCycle, templateDependencies } from '@/lib/clash/subscription/templateValidation';
 import {
   builtins,
   groupTypes,
@@ -42,6 +42,7 @@ export default function NodeGroups({
   inboundOptions,
 }: Props) {
   const uid = useId();
+  const [editError, setEditError] = useState('');
   const dependencies = templateDependencies(content).nodes;
   const referenceNodes = templateDependencies(referenceContent).nodes;
   const [draft, setDraft] = useState<{
@@ -56,6 +57,7 @@ export default function NodeGroups({
     replacement: string;
   }>();
   function open(name?: string, remove = false) {
+    setEditError('');
     const list = parseDocument(content).get('proxy-groups');
     const group = isSeq(list)
       ? list.items.find((g) => isMap(g) && g.get('name') === name)
@@ -111,6 +113,22 @@ export default function NodeGroups({
           }),
         );
       }
+      const effective = parseDocument(referenceContent);
+      if (!effective.has('proxy-groups')) effective.set('proxy-groups', effective.createNode([]));
+      const effectiveGroups = effective.get('proxy-groups');
+      if (!isSeq(effectiveGroups)) throw Error('proxy-groups 必须是列表');
+      const index = effectiveGroups.items.findIndex((g) => isMap(g) && g.get('name') === draft.key);
+      const edited = seq.items.find((g) => isMap(g) && g.get('name') === name);
+      if (draft.remove) {
+        if (index >= 0) effectiveGroups.delete(index);
+      } else if (isMap(edited)) {
+        if (index >= 0) effectiveGroups.set(index, edited.clone());
+        else effectiveGroups.add(edited.clone());
+      }
+      if (draft.key && draft.key !== replacement)
+        replaceSymbol(templateSymbols(effective), 'proxy', draft.key, replacement);
+      const cycle = dependencyCycle(templateDependencies(effective.toString()).nodes);
+      if (cycle) throw Error('循环引用：' + cycle.join(' → '));
       let next = draft.remove
         ? bindings.filter((b) => b.group !== draft.key)
         : bindings.map((b) => (b.group === draft.key ? { ...b, group: name } : b));
@@ -122,8 +140,47 @@ export default function NodeGroups({
       change(doc.toString(), next, draft.key, replacement);
       setDraft(undefined);
     } catch (e) {
-      void message.error(String(e));
+      setEditError(e instanceof Error ? e.message : String(e));
     }
+  }
+  const groupNames = new Set(
+    referenceNodes.filter((node) => node.kind === 'group').map((node) => node.name),
+  );
+  const memberNames = [
+    ...new Set([
+      ...referenceNodes
+        .filter((node) => node.kind !== 'group' || node.name !== draft?.key)
+        .map((node) => node.name),
+      ...(draft?.members ?? []),
+    ]),
+  ].filter((name) => !builtins.includes(name));
+  function renderMember(label: ReactNode, value: unknown, option = false) {
+    const [kind, key] = JSON.parse(String(value)) as [string, string];
+    const inbound =
+      kind === 'node' ? inboundOptions?.find((item) => item.inboundKey === key) : undefined;
+    const group = kind === 'member' && groupNames.has(key);
+    const system = kind === 'node' || builtins.includes(key);
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          width: option ? '100%' : undefined,
+        }}
+      >
+        <span>{label}</span>
+        {kind !== 'all' && (
+          <Space size={4}>
+            <Tag color={group ? 'purple' : system ? 'cyan' : 'gold'}>
+              {group ? '节点组' : system ? '系统出站' : '预设出站'}
+            </Tag>
+            {inbound?.hostOverride && <Tag color="blue">主机覆盖</Tag>}
+          </Space>
+        )}
+      </span>
+    );
   }
   const editor = draft && (
     <div className="template-entry-edit node-group-fields">
@@ -163,29 +220,12 @@ export default function NodeGroups({
                   : draft.nodes.map((key) => JSON.stringify(['node', key]))),
               ]}
               showSearch={{ optionFilterProp: 'label' }}
-              optionRender={(option) => {
-                const inbound = inboundOptions?.find(
-                  (item) => JSON.stringify(['node', item.inboundKey]) === option.value,
-                );
-                return (
-                  <Space size={6}>
-                    {option.label}
-                    {inbound?.hostOverride && <Tag color="blue">主机覆盖</Tag>}
-                  </Space>
-                );
-              }}
-              labelRender={({ label, value }) => {
-                const inbound = inboundOptions?.find(
-                  (item) => JSON.stringify(['node', item.inboundKey]) === value,
-                );
-                return (
-                  <Space size={6}>
-                    {label ?? value}
-                    {inbound?.hostOverride && <Tag color="blue">主机覆盖</Tag>}
-                  </Space>
-                );
-              }}
+              optionRender={(option) => renderMember(option.label, option.value, true)}
+              labelRender={({ label, value }) => renderMember(label ?? value, value)}
               options={[
+                ...(inboundOptions
+                  ? [{ value: JSON.stringify(['all', '*']), label: '全部已分配代理' }]
+                  : []),
                 {
                   label: '预设代理',
                   options: builtins.map((name) => ({
@@ -196,25 +236,16 @@ export default function NodeGroups({
                 {
                   label: '自定义代理',
                   options: [
-                    ...[
-                      ...new Set([
-                        ...referenceNodes
-                          .filter((node) => node.kind !== 'group' || node.name !== draft.key)
-                          .map((node) => node.name),
-                        ...draft.members,
-                      ]),
-                    ]
-                      .filter((name) => !builtins.includes(name))
+                    ...memberNames
+                      .filter((name) => !groupNames.has(name))
                       .map((name) => ({ value: JSON.stringify(['member', name]), label: name })),
-                    ...(inboundOptions
-                      ? [
-                          { value: JSON.stringify(['all', '*']), label: '全部已分配代理' },
-                          ...inboundOptions.map((node) => ({
-                            value: JSON.stringify(['node', node.inboundKey]),
-                            label: node.name,
-                          })),
-                        ]
-                      : []),
+                    ...(inboundOptions ?? []).map((inbound) => ({
+                      value: JSON.stringify(['node', inbound.inboundKey]),
+                      label: inbound.name,
+                    })),
+                    ...memberNames
+                      .filter((name) => groupNames.has(name))
+                      .map((name) => ({ value: JSON.stringify(['member', name]), label: name })),
                   ],
                 },
               ]}
@@ -247,6 +278,7 @@ export default function NodeGroups({
           </label>
         </>
       )}
+      {editError && <Alert type="error" title={editError} />}
       <div className="template-entry-actions">
         <Space>
           <Button onClick={() => setDraft(undefined)}>取消</Button>

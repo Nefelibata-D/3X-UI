@@ -29,7 +29,7 @@ import { setMessageInstance } from '@/utils/messageBus';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 import { LoginFormSchema, TwoFactorCodeSchema, type LoginFormValues } from '@/schemas/login';
 import './LoginPage.css';
-import { loginWithPasskey, passkeyError, passkeySupported } from '@/lib/clash/passkey';
+import { loginWithPasskey, passkeyError, passkeySupported } from '@/lib/clash/passkey/api';
 
 const HEADLINE_INTERVAL_MS = 2000;
 

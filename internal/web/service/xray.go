@@ -13,7 +13,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -21,7 +21,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/maskcompat"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
-
 	"go.uber.org/atomic"
 )
 
@@ -483,7 +482,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 	// Project: gateway routing is injected after every upstream route/outbound
 	// so managed inbounds cannot be captured by an earlier user rule.
-	if err := clash.InjectXrayConfig(xrayConfig); err != nil {
+	if err := policy.InjectXrayConfig(xrayConfig); err != nil {
 		return nil, err
 	}
 

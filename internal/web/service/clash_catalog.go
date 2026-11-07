@@ -3,15 +3,16 @@ package service
 import (
 	"encoding/json"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/catalog"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
 
 // NewClashCatalogProvider builds the project's read-only view of official
 // nodes, inbounds and clients. Official rows are read through their services;
 // quota enforcement never modifies the upstream inbound enabled state.
-func NewClashCatalogProvider() clash.CatalogProvider {
-	return func() (*clash.Catalog, error) {
+func NewClashCatalogProvider() policy.CatalogProvider {
+	return func() (*catalog.Catalog, error) {
 		settingSvc := &SettingService{}
 		guid, err := settingSvc.GetPanelGuid()
 		if err != nil {
@@ -35,9 +36,9 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 		}
 
 		nodeByID := make(map[int]*model.Node, len(nodes))
-		catalogNodes := []clash.NodeInfo{{
+		catalogNodes := []catalog.NodeInfo{{
 			ID:      0,
-			Key:     clash.LocalNodeKey,
+			Key:     catalog.LocalNodeKey,
 			Name:    "local",
 			Guid:    guid,
 			Enabled: true,
@@ -46,9 +47,9 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 		}}
 		for _, n := range nodes {
 			nodeByID[n.Id] = n
-			catalogNodes = append(catalogNodes, clash.NodeInfo{
+			catalogNodes = append(catalogNodes, catalog.NodeInfo{
 				ID:      n.Id,
-				Key:     clash.NodeKey(n.Id),
+				Key:     catalog.NodeKey(n.Id),
 				Name:    n.Name,
 				Guid:    n.Guid,
 				Enabled: n.Enable,
@@ -57,7 +58,7 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 		}
 
 		emailsByInbound := make(map[int][]string, len(inbounds))
-		catalogClients := make([]clash.ClientInfo, 0, len(clients))
+		catalogClients := make([]catalog.ClientInfo, 0, len(clients))
 		clientIndex := make(map[string]int, len(clients))
 		addEmail := func(inboundID int, email string) {
 			if email == "" {
@@ -80,7 +81,7 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 		}
 		for _, cl := range clients {
 			clientIndex[cl.Email] = len(catalogClients)
-			catalogClients = append(catalogClients, clash.ClientInfo{
+			catalogClients = append(catalogClients, catalog.ClientInfo{
 				ID:           cl.Id,
 				UUID:         cl.UUID,
 				TotalBytes:   cl.TotalGB,
@@ -114,7 +115,7 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 					attachInbound(idx, ib.Id)
 				} else {
 					clientIndex[client.Email] = len(catalogClients)
-					catalogClients = append(catalogClients, clash.ClientInfo{
+					catalogClients = append(catalogClients, catalog.ClientInfo{
 						ID:         0,
 						Email:      client.Email,
 						Enabled:    true,
@@ -124,21 +125,21 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 			}
 		}
 
-		catalogInbounds := make([]clash.InboundInfo, 0, len(inbounds))
+		catalogInbounds := make([]catalog.InboundInfo, 0, len(inbounds))
 		for _, ib := range inbounds {
-			key := clash.LocalNodeKey
+			key := catalog.LocalNodeKey
 			if ib.NodeID != nil {
 				if _, ok := nodeByID[*ib.NodeID]; !ok {
 					continue
 				}
-				key = clash.NodeKey(*ib.NodeID)
+				key = catalog.NodeKey(*ib.NodeID)
 			}
 			var stream struct {
 				Network  string `json:"network"`
 				Security string `json:"security"`
 			}
 			_ = json.Unmarshal([]byte(ib.StreamSettings), &stream)
-			catalogInbounds = append(catalogInbounds, clash.InboundInfo{
+			catalogInbounds = append(catalogInbounds, catalog.InboundInfo{
 				ID:       ib.Id,
 				NodeKey:  key,
 				Tag:      ib.Tag,
@@ -151,7 +152,7 @@ func NewClashCatalogProvider() clash.CatalogProvider {
 				Clients:  append([]string(nil), emailsByInbound[ib.Id]...),
 			})
 		}
-		return &clash.Catalog{
+		return &catalog.Catalog{
 			PanelGuid: guid,
 			Timezone:  loc.String(),
 			Nodes:     catalogNodes,

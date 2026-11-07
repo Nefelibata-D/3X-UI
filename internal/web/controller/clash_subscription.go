@@ -2,15 +2,16 @@ package controller
 
 import (
 	"errors"
+	"net"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-yaml"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/sub"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"net"
-	"strconv"
 )
 
 func (a *ClashController) clientSubscription(c *gin.Context) {
@@ -19,7 +20,7 @@ func (a *ClashController) clientSubscription(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	row, err := clash.ClientSubscription(id)
+	row, err := subscription.ClientSubscription(id)
 	jsonObj(c, row, err)
 }
 
@@ -29,19 +30,19 @@ func (a *ClashController) saveClientSubscription(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	var row clash.SubscriptionBinding
+	var row subscription.SubscriptionBinding
 	if err = c.ShouldBindJSON(&row); err == nil {
 		if row.TemplateID != 0 {
 			_, err = projectSubscription(c, id, &row)
 		}
 		if err == nil {
-			err = clash.SaveClientSubscription(id, &row)
+			err = subscription.SaveClientSubscription(id, &row)
 		}
 	}
 	jsonObj(c, row, err)
 }
 
-func projectSubscription(c *gin.Context, id int, binding *clash.SubscriptionBinding) (string, error) {
+func projectSubscription(c *gin.Context, id int, binding *subscription.SubscriptionBinding) (string, error) {
 	var client model.ClientRecord
 	if err := database.GetDB().First(&client, id).Error; err != nil {
 		return "", err
@@ -80,9 +81,10 @@ func (a *ClashController) validateSubscription(c *gin.Context) {
 		jsonObj(c, nil, err)
 		return
 	}
-	var binding clash.SubscriptionBinding
+	var binding subscription.SubscriptionBinding
+	var rendered string
 	if err = c.ShouldBindJSON(&binding); err == nil {
-		_, err = projectSubscription(c, id, &binding)
+		rendered, err = projectSubscription(c, id, &binding)
 	}
-	jsonObj(c, nil, err)
+	jsonObj(c, rendered, err)
 }

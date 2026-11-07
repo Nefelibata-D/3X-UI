@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -28,7 +28,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
-
 	"gorm.io/gorm"
 )
 
@@ -840,7 +839,7 @@ func (s *NodeService) Delete(id int) error {
 	// Project: wait for node sync and policy work before detaching the master-side records.
 	nodeSyncLifecycle.Lock()
 	defer nodeSyncLifecycle.Unlock()
-	release := clash.LockNodeRemoval()
+	release := policy.LockNodeRemoval()
 	defer release()
 	db := database.GetDB()
 	// Capture the node's guid before deleting the row so we can drop its per-node
@@ -861,7 +860,7 @@ func (s *NodeService) Delete(id int) error {
 		if err := detachNodeInbounds(tx, id); err != nil {
 			return err
 		}
-		if err := clash.ForgetNodeTx(tx, id); err != nil {
+		if err := policy.ForgetNodeTx(tx, id); err != nil {
 			return err
 		}
 		if err := tx.Where("node_id = ?", id).Delete(&model.NodeClientTraffic{}).Error; err != nil {

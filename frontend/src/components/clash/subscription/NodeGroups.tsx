@@ -7,13 +7,13 @@ import { Alert, Button, Input, Select, Space, Tag } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isSeq, parseDocument } from 'yaml';
 
-import { dependencyCycle, templateDependencies } from '@/lib/clash/subscription/templateValidation';
+import { dependencyCycle, templateDependencies } from '@/lib/clash/subscription/template/validation';
 import {
   builtins,
   groupTypes,
   replaceSymbol,
   templateSymbols,
-} from '@/lib/clash/subscription/templateSymbols';
+} from '@/lib/clash/subscription/template/symbols';
 type Binding = { group: string; allNodes: boolean; nodes: string[] };
 interface Props {
   inboundOptions?: { inboundKey: string; name: string; hostOverride: boolean }[];

@@ -182,7 +182,7 @@ func (s *SubClashService) getClashWithProject(subId string, host string, legacy 
 
 	ensureUniqueProxyNames(proxies)
 	// Project: render only after upstream assigns unique proxy names; unbound output continues below.
-	if body, handled, err := project.render(subId, proxies, legacy); handled || err != nil {
+	if body, handled, err := project.render(subId, proxies, legacy, subReq.projectPublicBaseURL()); handled || err != nil {
 		if err != nil {
 			return "", "", err
 		}

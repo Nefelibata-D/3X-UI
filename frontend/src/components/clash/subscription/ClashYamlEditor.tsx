@@ -3,13 +3,13 @@ import * as monaco from 'monaco-editor';
 import nightOwl from '@/components/clash/subscription/themes/night-owl.json';
 import lightOwl from '@/components/clash/subscription/themes/light-owl.json';
 import 'monaco-editor/esm/vs/base/browser/ui/codicons/codiconStyles.js';
-import { templateSchema } from '@/lib/clash/subscription/templateSchema';
+import { templateSchema } from '@/lib/clash/subscription/template/schema';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import YamlWorker from 'monaco-yaml/yaml.worker?worker';
 import { configureMonacoYaml } from 'monaco-yaml';
 import { useTheme } from '@/hooks/useTheme';
-import { installTemplateReferences } from '@/lib/clash/subscription/templateReferenceEditor';
-import { validateTemplate } from '@/lib/clash/subscription/templateValidation';
+import { installTemplateReferences } from '@/lib/clash/subscription/template/referenceEditor';
+import { validateTemplate } from '@/lib/clash/subscription/template/validation';
 import '@/components/clash/subscription/ClashYamlEditor.css';
 
 (globalThis as typeof globalThis & { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {

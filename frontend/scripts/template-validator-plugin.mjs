@@ -4,7 +4,7 @@ import Ajv from 'ajv';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 
 const moduleId = 'virtual:template-schema-validator';
-const schemaPath = path.resolve(import.meta.dirname, '../src/lib/clash/subscription/templateSchema.ts');
+const schemaPath = path.resolve(import.meta.dirname, '../src/lib/clash/subscription/template/schema.ts');
 
 export default function templateValidatorPlugin() {
   return {

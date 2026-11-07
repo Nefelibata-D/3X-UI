@@ -39,7 +39,7 @@ import { resolveExternalLinkExpiry } from '@/lib/clients/external-link';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import { useClientHwids } from '@/hooks/useClientHwids';
 import { useRawHostsQuery } from '@/api/queries/useRawHostsQuery';
-import { useClientQuotaWarning } from '@/api/queries/useClientQuotaWarning';
+import { useClientQuotaWarning } from '@/api/queries/clash/allocation/useQuotaWarning';
 import { DateTimePicker, SelectAllClearButtons } from '@/components/form';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import ClientHwidListModal from '@/components/clients/ClientHwidList';
@@ -57,8 +57,8 @@ import type {
 } from '@/hooks/useClients';
 import { useFail2banStatusQuery, getLimitIpNotice } from '@/api/queries/useFail2banStatusQuery';
 import ClientRenewalFields from './ClientRenewalFields';
-import ClientLoadBalancingTab from './ClientLoadBalancingTab';
-import ClientNodeResetMode from './ClientNodeResetMode';
+import ClientLoadBalancingTab from '../../components/clash/allocation/ClientTab';
+import ClientNodeResetMode from '../../components/clash/allocation/ResetMode';
 import { ClientFormSchema, ClientCreateFormSchema, type ClientFormValues } from '@/schemas/client';
 import './ClientFormModal.css';
 

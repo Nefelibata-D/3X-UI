@@ -2,14 +2,29 @@
 
 ## 当前代码边界
 
-- `models.go`：持久化数据模型；`catalog.go`：官方数据的项目只读视图；`weights.go` / `ratio.go`：权重解析与归一化。
-- `quota.go`：额度校验与保存；`overview.go`：管理端查询视图；`delivery_plan.go`：下发计划；`policy_operations.go`：重置与同步入口。网关与通行密钥分别保持在 `gateway/`、`passkey/`。
-- `remote.go`：仅解析节点身份并调用项目策略接口。`internal/web/runtime/project_request.go` 为官方 Remote 提供窄适配，复用认证、URL、超时、私网策略、请求完整性及响应解析。官方请求保留 64 MiB 上限；项目请求保持 8 MiB 上限并禁止重定向。
-- `internal/sub/clash_project.go`：项目订阅目录、预览和发布编排；官方 `clash_service.go` 继续负责授权和协议代理生成，仅接入来源记录与项目渲染。
-- `internal/web/clash.go`：项目启动钩子，`web.go` 保留生命周期调用。节点删除定制按用户要求保留，不改变此次重构的业务行为。
-- 前端共享编辑器在 `components/clash/subscription/`，校验与引用处理在 `lib/clash/subscription/`；schema 在 `schemas/clash/`，资源查询和 mutation 在 `api/queries/`。不从通用组件反向引用页面。
+自有代码按业务拆包，目录表示模块，文件名表示模块内职责；官方目录和业务实现保持原有结构。
 
-本次重构的隔离回归入口：`internal/sub/test/project_subscription_test.go`（目录、预览与发布一致性）、`internal/web/runtime/test/project_request_test.go`（认证、查询串、重定向与响应上限）、`frontend/test/refactor.config.mjs`（共享缓存刷新、模式契约与订阅覆盖删除）。项目测试按约定保持未跟踪。构建和隔离测试不代表真实跨容器代理流量验收。
+| 目录 / 文件 | 职责 |
+| --- | --- |
+| `bootstrap.go` | 扩展表迁移与面板启动编排；根包不再承载业务实现或兼容转发 |
+| `catalog/` | 官方节点、入站和客户端的只读目录类型、身份与查询 |
+| `allocation/` | 节点额度、用户分配、权重归一化、持久化和分配视图 |
+| `policy/` | 策略计划、远程下发、运行时应用、账本、重置、状态与 Xray 接线 |
+| `subscription/` | 绑定、合成、渲染、校验、规则集、模板和公开订阅接口 |
+| `gateway/` | TCP 数据面、额度状态与周期 |
+| `passkey/` | 通行密钥 |
+| `storage/` | 复用官方数据库连接的初始化检查；各业务包持有模型和读写，完整迁移由根包统一编排 |
+
+依赖方向：`allocation → catalog`，`policy → allocation/catalog/gateway`，`subscription → policy/allocation/catalog`；根包负责组装，不被业务包反向导入。各模块测试在自己的 `test/` 下；`internal/clash/test/` 验证跨模块启动语义，其他跨模块与官方接线测试保留原目录，均不跟踪提交。
+
+官方接线仍位于 `internal/sub/clash_project.go`、`internal/web/clash.go`、`internal/web/controller/clash*.go` 和 `internal/web/service/clash*.go`。官方服务写入和协议转换逻辑不搬入项目包；本轮只更新引用。`internal/web/runtime/project_request.go` 继续复用官方 Remote 的认证、URL、超时、私网策略和响应解析。
+
+前端沿用官方层次，在每层的 `clash/` 下按业务组织：
+
+- `components/clash/{allocation,subscription,passkey}/`：项目组件，客户端和设置页只保留接入引用。
+- `pages/clash/{allocation,subscription}/`：项目独立页面，浏览器路由不变。
+- `lib/clash/{allocation,subscription,passkey}/`：业务逻辑与请求；订阅的模板 schema、符号、引用编辑和校验集中在 `subscription/template/`。
+- `schemas/clash/`、`api/queries/clash/`：项目 schema 和查询；继续使用官方请求工具与缓存机制。
 
 ## 功能契约与历史记录
 
@@ -23,7 +38,7 @@
 
 网关位于 gateway/，面板进程内 TCP SOCKS 数据面，不是 node-agent。子面板必须部署带扩展的 3x-ui。预算达到后进入宽限，服务端继续计量并允许新连接，宽限行为由客户端主动限制；时间或额外流量先到后，仅终止该用户的网关连接并拒绝新连接，不关闭共享代理入站。保留版本屏障、幂等重置和持久化错误传播。UDP 不支持。
 
-客户端接口 GET <basePath>/v1/nodes/:node/status 使用官方客户端 UUID 和出口面板 GUID；200/409/403 表示正常/宽限/停用；未应用或无法确认回报为 503。Mihomo 无需修改；weighted-sticky 首次绑定按权重抽选、随后保持黏性，正式订阅消费仍属下一阶段。
+客户端接口 GET <basePath>/v1/nodes/:node/status 使用官方客户端 UUID 和出口面板 GUID；200/409/403 表示正常/宽限/停用；未应用或无法确认回报为 503。Mihomo 无需修改；weighted-sticky 首次绑定按权重抽选、随后保持黏性，正式订阅消费由 subscription/policy.go 接入，生成下列加权订阅字段。
 
 项目 UI 直接中文，官方国际化不改。项目组件独立文件，复用官方样式和请求工具。客户端列表接入独立节点流量组件，流量条利用剩余宽度，移除重复的“剩余”列，“实时速度”说明其为观测速率；官方账户总额度和基础 API 含义不改。关联变更后刷新项目缓存，节点报告每 10 秒刷新。
 
@@ -33,11 +48,11 @@
 
 列表 ID 接线：官方 ClientSlim / toClientSlim 增加官方记录 id；列表流量组件按此 ID 查询，不能将精简列表缺少 ID 误报为未关联节点。标签分配方式使用 Select，继承时隐藏权重输入，仅保留最终比例；0 无限含义通过问号 Tooltip 显示。
 
-节点删除：沿用官方删除 API，但语义为解除主控管理。NodeService.Delete 在事务中清理主控入站副本、客户端关联、Host、订阅组选项、节点流量基线及项目权重/额度/下发记录；保留客户端账户、累计流量、其他节点及远端配置。不调用远端 DelInbound。同步任务与删除互斥，迟到快照遇到已删除节点直接退出。前端确认框说明边界，成功后刷新相关查询。上游接线位于 service/node.go、service/inbound_node.go、job/node_traffic_sync_job.go，清理实现分别放 service/node_detach.go 和 clash/node_removal.go。
+节点删除：沿用官方删除 API，但语义为解除主控管理。NodeService.Delete 在事务中清理主控入站副本、客户端关联、Host、订阅组选项、节点流量基线及项目权重/额度/下发记录；保留客户端账户、累计流量、其他节点及远端配置。不调用远端 DelInbound。同步任务与删除互斥，迟到快照遇到已删除节点直接退出。前端确认框说明边界，成功后刷新相关查询。上游接线位于 service/node.go、service/inbound_node.go、job/node_traffic_sync_job.go，清理实现分别放 service/node_detach.go 和 clash/policy/removal.go。
 
 ## 2026-11-03 本轮验证
 
-隔离临时数据库与可控时钟测试通过：并发超分拒绝、有限节点拒绝无限分配、节点配置回读与策略携带周期、短月/闰月边界、不同节点独立重置、手动模式、重启保留计数、变更周期不清零、有限节点未分配拒绝准入及分配后恢复。测试位于 test/quota_schedule_test.go，保持未跟踪。前端 typecheck、定向 oxlint、生产构建通过。尚未实跑新周期的真实跨容器流量；实屏复核因电脑控制未获准访问 Edge 而未完成。
+隔离临时数据库与可控时钟测试通过：并发超分拒绝、有限节点拒绝无限分配、节点配置回读与策略携带周期、短月/闰月边界、不同节点独立重置、手动模式、重启保留计数、变更周期不清零、有限节点未分配拒绝准入及分配后恢复。测试位于 allocation/test/quota_schedule_test.go，保持未跟踪。前端 typecheck、定向 oxlint、生产构建通过。尚未实跑新周期的真实跨容器流量；实屏复核因电脑控制未获准访问 Edge 而未完成。
 Clash 订阅一级页跟随 subClashEnable。规则集使用 classical / yaml，通过面板基础路径下 rulesets/{四位随机码}/{创建时名称}.yaml 公开读取。已发布的文件名保持稳定，历史数字链接继续可用。预览直接读取发布文件。可导入 payload YAML 或每行一条规则的文本；路由编辑器支持当前 Mihomo classical 解析器接受的 34 种类型。黑名单用途允许 DOMAIN、DOMAIN-SUFFIX、DOMAIN-KEYWORD、DOMAIN-REGEX、DOMAIN-WILDCARD，以及 PROCESS-NAME / PROCESS-PATH 及其 -REGEX / -WILDCARD，批量导入同样受限。YAML 模板可引用这些规则集；客户端订阅已接入官方现代 Clash/Mihomo 转换链，未绑定模板和 legacy Clash 保持官方行为。
 Clash 订阅是侧栏一级入口，规则集与 YAML 模板通过页面内标签切换。模板保存在 clash_yaml_templates，可导入、编辑、另存副本和删除；保存时解析 YAML 对象并提取具名策略组。
 
@@ -61,7 +76,7 @@ YAML 模板编辑器使用 Monaco 0.52.2 与 monaco-yaml 5.4.0，语言服务 wo
 
 节点注入支持全部已分配节点动态继承，或显式选取已分配节点。官方转换器生成凭据和代理，窄接线记录其实际所属节点，在代理名称去重后交给项目渲染；不复制协议转换逻辑，不新增凭据权威源。模板静态独立代理凭据拒绝绑定，空注入组、未知引用、循环组依赖在校验中报错。被绑定模板禁止删除。链接沿用官方 Clash 订阅地址。
 
-2026-11-05 本轮验证：Go 定向编译，隔离数据库的绑定保存/读回、未授权节点拒绝、覆盖/禁用/顺序与节点注入测试，官方 Host/Clash 转换定向回归，前端组件交互测试及生产构建通过。新增测试位于 internal/clash/test/subscriptions_test.go 和 frontend/src/pages/clash-subscriptions/test/，保持未跟踪。全项目 typecheck 存在既有 ClientNodeResetMode.tsx 类型错误；本轮新增代码未报错。尚未验证真实客户端导入后的代理流量；当前范围也不声称完成权重/control 元数据的自动下发。
+2026-11-05 本轮验证：Go 定向编译，隔离数据库的绑定保存/读回、未授权节点拒绝、覆盖/禁用/顺序与节点注入测试，官方 Host/Clash 转换定向回归，前端组件交互测试及生产构建通过。新增测试位于 internal/clash/subscription/test/subscriptions_test.go 和 frontend/src/pages/clash/subscription/test/，保持未跟踪。全项目 typecheck 存在既有 ClientNodeResetMode.tsx 类型错误；本轮新增代码未报错。尚未验证真实客户端导入后的代理流量；当前范围也不声称完成权重/control 元数据的自动下发。
 
 2026-11-06 界面调整：模板库与客户端订阅共用 TemplateWorkspace（原左侧 YAML 编辑器、右侧节点/规则集/路由/负载均衡/链式代理标签）。模板视图复用原条目组件，只增加禁用和复制覆盖操作。“订阅设置”作为第一个且默认打开的标签，集中显示模板选择、节点注入、订阅地址、配置更新时间和官方客户端最后拉取时间；不将配置保存时间当作客户端更新完成。YAML 编辑转换为客户端差异，普通顶层字段覆盖，null 表示移除继承字段；代理凭据仍由官方授权转换生成。
 
@@ -77,7 +92,7 @@ YAML 模板编辑器使用 Monaco 0.52.2 与 monaco-yaml 5.4.0，语言服务 wo
 
 2026-11-06：模板黑名单允许空 proxy 或范例名称及不完整组成员，保留所属组与 DOMAIN 规则结构校验。发布前必须补齐有效代理，满足负载均衡至少两个节点且保留未列入黑名单的节点；保存订阅及实际拉取均执行检查。订阅绑定 dialers 保存实际代理名称到前置名称的映射，不保存独立代理凭据；检查缺失引用、重复节点及代理/节点组混合环路。
 
-上游窄接线：internal/sub/clash_service.go 复用原生授权、外部订阅转换与代理命名流程，通过 ProjectSubscription 提供管理员代理目录（含官方生成配置）和未保存草稿的发布校验。controller/clash_subscription.go 复用管理会话接口提供 subscription/proxies 和 subscription/validate，保存前验证；RenderSubscriptionBinding 在注入后应用 dialers 并验证。校验是项目配置完整性与引用检查，不代替 Mihomo 核心联网加载规则集或连接测试。新增项目测试在 internal/clash/test/subscriptions_test.go，浏览器隔离检查在 test/client-subscription-chain-check.cjs。
+上游窄接线：internal/sub/clash_service.go 复用原生授权、外部订阅转换与代理命名流程，通过 ProjectSubscription 提供管理员代理目录（含官方生成配置）和未保存草稿的发布校验。controller/clash_subscription.go 复用管理会话接口提供 subscription/proxies 和 subscription/validate，保存前验证；RenderSubscriptionBinding 在注入后应用 dialers 并验证。校验是项目配置完整性与引用检查，不代替 Mihomo 核心联网加载规则集或连接测试。新增项目测试在 internal/clash/subscription/test/subscriptions_test.go，浏览器隔离检查在 test/client-subscription-chain-check.cjs。
 
 YAML 编辑器使用校验器返回的 AST 源位置实时显示行内错误；引用、循环依赖、负载均衡和黑名单校验与模板校验共用逻辑。浅色与深色主题分别区分字段、字符串、数字、布尔值和注释。定向浏览器检查：test/yaml-diagnostics-check.cjs。
 
@@ -104,3 +119,33 @@ YAML 编辑器使用校验器返回的 AST 源位置实时显示行内错误；�
 规则集卡片提供编辑、复制链接、下载和删除四个图标操作。删除需确认，模板路由或黑名单仍引用时拒绝删除；删除成功后发布链接失效。
 
 远程主控策略优先于同一用户的子节点本地策略，不依赖是否设置预算。接管通过现有策略移除流程退出本地网关并保留账本记录；后台同步在远程归属存在期间不重建本地策略。不同远程主控仍不可同时管理同一用户；显式解除远程策略后，本地同步以新修订恢复。
+
+## 加权订阅发布与公开检查接口
+
+`subscription/policy.go` 在官方代理完成命名、主机覆盖与组注入后，复用现有默认/用户权重生成 `weighted-sticky.weights`，按代理所属官方节点填写 `node-ids`（面板 GUID），复用官方用户 UUID；不存在第二套可编辑权重或凭据。共享订阅身份若对应多个官方用户，不能确定单一 control 凭据时明确拒绝。默认超时/绑定数为 300 秒/10000，control 查询超时/最短间隔/宽限间隔为 3/30/300 秒；模板已有调优参数保留。受管 weights、UUID、node-ids、control 地址由发布器负责，不能用模板覆盖绕开授权。
+
+负载均衡未指定健康 URL 时默认输出 `<Clash 订阅地址前缀>/_project/health`、预期 204、间隔 300 秒、lazy=false；已有健康 URL 保留。地址使用官方 BuildURLs，包含自定义反代域名和路径前缀。`subscription/http.go` 注册公开 GET/HEAD health 和 UUID Bearer 鉴权的 `/v1/nodes/:node/status`，在订阅服务 `subClashPath/_project` 和面板 basePath 下复用处理器。健康接口无响应体且禁止缓存；不代表额度正常。额度接口继续只认已应用策略，不可确认时返回 503，不伪造 normal。
+
+前端创建/迁移加权负载时，不支持的组置灰并通过悬浮说明原因：嵌套代理组、系统出站、订阅内无面板身份的代理或不足两个受管代理。模板空组可留待注入。普通代理组引用不受影响。前后端均保留校验；published 校验覆盖整数权重、权重总和、control URL/UUID、超时、node-ids 对齐与 32 个服务器上限。切换为其他策略时移除不适用的 weighted-sticky 参数。
+
+“校验配置”复用实际发布路径，返回最终 YAML 只读预览；保存和下载也使用相同生成逻辑。链式代理连接箭头是拖动卡片的相邻元素，不随代理卡片进入拖动副本。
+
+上游接线仅限：internal/sub/clash_service.go 的项目渲染调用、internal/sub/controller.go 的项目路由注册；已有项目适配 clash_project.go 传入官方订阅 URL，controller/clash_subscription.go 返回生成预览，clash_status.go 委托项目处理器。新增业务保持在 internal/clash/。
+
+本轮隔离验证：默认/用户权重与保存后发布一致性、官方转换器与反代路径、公开健康接口及鉴权状态、前端禁用/悬浮提示与箭头 DOM 边界、覆盖保存回归均通过；生成 YAML 通过当前 Mihomo 源码的 ParseOptions 和完整 config.Parse，亦通过前端 Schema。测试在 internal/clash/{allocation,policy,subscription}/test/、test/subscription_inbounds/、frontend/src/pages/clash/subscription/test/ 与 mihomo/test/panel_subscription_contract/ 保持未跟踪。配置解析不等于真实出口连接验证，本轮未更新服务器。
+## 2026-11-08 目录整理与一致性复核
+
+自有扩展按业务拆包，官方目录未重组。模型表名、字段、API URL、页面路由与业务算法保留；原有未提交实现随文件迁移保留。
+
+复核发现并修正了第一次整理中的初始化差异：部分迁移曾移到 `startOnce` 外面，独立运行时也曾只迁移额度与策略表。现在 `bootstrap.go` 恢复原版完整迁移顺序：一次 AutoMigrate 七个项目模型 → 通行密钥迁移 → 规则集发布码迁移。组装层向 `policy.Configure` / `policy.NewRuntime` 显式传入 `clash.Migrate`，运行时仍在原来的 `startOnce` 内执行完整迁移，不反向依赖根包、不进行运行时补偿。
+
+本轮证据：
+
+- 使用整理前保存的真实后端源码作 Go overlay，同一组启动测试在原版通过、第一次整理版失败、修正后通过。覆盖独立运行时完整建表、重复面板启动不重跑发布码迁移、首次初始化失败后不自动重试。
+- 逐声明、逐词法 token 比较保留字符串字面量；223 个原有声明在消除包限定名、等价时间函数内联及迁移回调调用方式后一致，包含完整迁移与启动流程。Runtime、Configure、NewRuntime 的显式初始化依赖接线另行核对。
+- 原版与当前版分别迁移全新临时 SQLite，实际表和索引定义完全一致。
+- 原版与当前版运行相同的额度、策略、订阅、官方订阅接线、入站选择和额度清理测试，均通过。原先 TestTemplateLibrary 缺少目录初始化，已仅补齐测试夹具，原版与当前版均不跳过地通过订阅测试。
+- 当前主程序构建、通行密钥、Remote 接线与节点删除回归通过；启动、额度和策略测试的 race 检查通过。
+- 前端 37 个整理前干净文件的 AST / 样式比对仅有引用路径差异；5 个整理前已有逻辑改动的文件没有当时完整快照，不用 HEAD 冒充它们的整理前基线。迁移脚本的操作范围为文件路径与引用替换；前端类型检查及缓存/删除、加权发布、覆盖保存的 12 项定向回归本轮通过。生产构建在目录整理阶段通过，本次后端初始化修正未改前端生产代码。
+
+旧 `test/clash/...` 在整理前已有已删除接口导致的编译失败，不计入本轮通过范围。没有重启开发面板或运行真实跨节点代理连接验收。新增回归位于 `internal/clash/test/lifecycle_test.go`，项目测试保持未跟踪；本轮未提交、暂存或推送。

@@ -2826,7 +2826,8 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/clash/clients/:id/subscription/validate',
         summary:
-          'Validate a subscription draft after real node injection, including blacklist completeness and dialer cycles. Does not save.',
+          'Validate a subscription draft after proxy, weight, stable node identity and control injection. Returns the final YAML for preview; does not save or test network connectivity.',
+        responseObjectSchema: { type: 'string', description: 'Final rendered subscription YAML' },
       },
       {
         method: 'GET',
@@ -2983,6 +2984,44 @@ export const sections: readonly Section[] = [
           'Return the JSON subscription status and metadata headers without a body. Registered only when JSON subscriptions are enabled.',
         params: [{ name: 'subid', in: 'path', type: 'string', desc: 'Client subscription ID.' }],
         responses: subscriptionHeadResponses,
+      },
+      {
+        method: 'GET',
+        path: '/{clashPath}_project/health',
+        summary:
+          'Public proxy health target: 204, Cache-Control: no-store. Also available as GET/HEAD <panelBasePath>/health. No account status is exposed.',
+        security: [],
+        responses: { '204': { description: 'Healthy; empty body' } },
+      },
+      {
+        method: 'HEAD',
+        path: '/{clashPath}_project/health',
+        summary: 'Public health target: identical 204 status without a response body.',
+        security: [],
+        responses: { '204': { description: 'Healthy; empty body' } },
+      },
+      {
+        method: 'GET',
+        path: '/{clashPath}_project/v1/nodes/:node/status',
+        summary:
+          'Bearer official user UUID; node is the stable panel GUID. Returns 200 normal, 409 grace, 403 disabled, 401 invalid credential, 404 unauthorized node or 503 unavailable policy. Also available under the panel base path.',
+        security: [],
+        params: [
+          {
+            name: 'Authorization',
+            in: 'header',
+            type: 'string',
+            desc: 'Bearer <official user UUID>',
+          },
+        ],
+        responses: {
+          '200': { description: 'Normal; empty body' },
+          '409': { description: 'Grace; empty body' },
+          '403': { description: 'Disabled; empty body' },
+          '401': { description: 'Invalid credential; empty body' },
+          '404': { description: 'Node is not authorized; empty body' },
+          '503': { description: 'Policy is not confirmed applied; empty body' },
+        },
       },
       {
         method: 'GET',

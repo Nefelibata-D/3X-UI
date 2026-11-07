@@ -68,7 +68,7 @@ import type {
   ExternalLink,
   ExternalLinkInput,
 } from '@/hooks/useClients';
-import ClientNodeTraffic from './ClientNodeTraffic';
+import ClientNodeTraffic from '../../components/clash/allocation/NodeTraffic';
 import ClientSpeedTag, { isActiveSpeed } from '@/components/clients/ClientSpeedTag';
 import ClientCardComment from '@/components/clients/ClientCardComment';
 import AppSidebar from '@/layouts/AppSidebar';
@@ -82,7 +82,7 @@ import {
 } from '@/components/utility/speedTagStyle';
 const ClientFormModal = lazy(() => import('./ClientFormModal'));
 const ClientInfoModal = lazy(() => import('./ClientInfoModal'));
-const ClientSubscriptionModal = lazy(() => import('./ClientSubscriptionModal'));
+const ClientSubscriptionModal = lazy(() => import('../../components/clash/subscription/ClientModal'));
 const ClientQrModal = lazy(() => import('./ClientQrModal'));
 const ClientBulkAddModal = lazy(() => import('./ClientBulkAddModal'));
 const ClientBulkAdjustModal = lazy(() => import('./ClientBulkAdjustModal'));

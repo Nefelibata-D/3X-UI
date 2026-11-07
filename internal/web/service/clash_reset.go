@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
@@ -17,7 +17,7 @@ func requestClashTrafficResets(emails []string) error {
 		}
 		ids = append(ids, chunk...)
 	}
-	return clash.RequestClientResets(ids)
+	return policy.RequestClientResets(ids)
 }
 
 func requestAllClashTrafficResets() error {
@@ -25,5 +25,5 @@ func requestAllClashTrafficResets() error {
 	if err := database.GetDB().Model(&model.ClientRecord{}).Pluck("id", &ids).Error; err != nil {
 		return err
 	}
-	return clash.RequestClientResets(ids)
+	return policy.RequestClientResets(ids)
 }

@@ -3,14 +3,13 @@ package service
 import (
 	"time"
 
-	"gorm.io/gorm"
-
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"gorm.io/gorm"
 )
 
 func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email string) (bool, error) {
@@ -45,7 +44,7 @@ func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email st
 		needRestart = nr
 	}
 	// Project: reset the node ledgers alongside the upstream client counter before re-enabling traffic.
-	if err := clash.RequestClientReset(rec.Id); err != nil {
+	if err := policy.RequestClientReset(rec.Id); err != nil {
 		return needRestart, err
 	}
 

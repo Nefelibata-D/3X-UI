@@ -64,7 +64,15 @@ export async function saveSubscription(id: number | undefined, row: Subscription
   success(await HttpUtil.post(root + clientPath(id), subscriptionSchema.parse(row), json));
 }
 export async function validateSubscription(id: number | undefined, row: Subscription) {
-  success(
-    await HttpUtil.post(root + clientPath(id) + '/validate', subscriptionSchema.parse(row), json),
-  );
+  return z
+    .string()
+    .parse(
+      success(
+        await HttpUtil.post(
+          root + clientPath(id) + '/validate',
+          subscriptionSchema.parse(row),
+          json,
+        ),
+      ),
+    );
 }

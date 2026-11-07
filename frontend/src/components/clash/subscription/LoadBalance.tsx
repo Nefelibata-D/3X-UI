@@ -1,19 +1,21 @@
 import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, message, Button, Input, Select, Space, Tag } from 'antd';
+import { Alert, message, Button, Input, Select, Space, Tag, Tooltip } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isSeq } from 'yaml';
 import {
   blacklistRuleKinds,
   loadBalanceErrors,
   loadBalanceModel,
-} from '@/lib/clash/subscription/loadBalanceModel';
+  weightedGroupIssue,
+} from '@/lib/clash/subscription/loadBalance';
 
 interface Props {
   visibleGroups?: string[];
   entryActions?: (name: string) => ReactNode;
   entryClassName?: (name: string) => string;
   availableNodes?: Record<string, string[]>;
+  managedProxyNames?: string[];
   content: string;
   readonly: boolean;
   onChange: (value: string) => void;
@@ -77,6 +79,7 @@ function BalanceContent({
   editing = false,
   initialGroup,
   availableNodes,
+  managedProxyNames,
   visibleGroups,
   onEdit,
   onPendingRule,
@@ -104,6 +107,21 @@ function BalanceContent({
   }, [draft, onPendingRule]);
   const { doc, groups } = loadBalanceModel(content);
   const group = groups.find((g) => g.name === selected);
+  const weightedIssue = (name: string) =>
+    weightedGroupIssue(
+      availableNodes?.[name] ?? groups.find((g) => g.name === name)?.members ?? [],
+      groups.map((g) => g.name),
+      managedProxyNames,
+    );
+  const groupOption = (name: string, weighted: boolean) => {
+    const reason = weighted ? weightedIssue(name) : '';
+    return { value: name, label: name, disabled: !!reason, reason };
+  };
+  const optionLabel = (label: ReactNode, reason?: string) => (
+    <Tooltip title={reason}>
+      <span style={{ display: 'block', width: '100%' }}>{label}</span>
+    </Tooltip>
+  );
   const errors = loadBalanceErrors(content);
   const entries = doc.get('site-blacklist');
   const providers = doc.get('rule-providers');
@@ -134,6 +152,7 @@ function BalanceContent({
     const source = groups.find((g) => g.name === from);
     const target = groups.find((g) => g.name === to);
     if (!source || !target || target.type === 'load-balance') return;
+    if (source.strategy === 'weighted-sticky' && weightedIssue(to)) return;
     for (const key of ['strategy', 'weighted-sticky']) {
       const value = doc.getIn(['proxy-groups', source.index, key], true);
       if (value !== undefined) doc.setIn(['proxy-groups', target.index, key], value);
@@ -180,6 +199,7 @@ function BalanceContent({
     if (save) commit();
   }
   function addGroup(name: string) {
+    if (weightedIssue(name)) return;
     const target = groups.find((g) => g.name === name);
     if (!target) {
       void message.error('请选择节点组');
@@ -353,7 +373,8 @@ function BalanceContent({
                       value={g.name}
                       options={groups
                         .filter((item) => item.name === g.name || item.type !== 'load-balance')
-                        .map((item) => ({ value: item.name }))}
+                        .map((item) => groupOption(item.name, g.strategy === 'weighted-sticky'))}
+                      optionRender={(option) => optionLabel(option.label, option.data.reason)}
                       onChange={(name) => changeGroup(g.name, name)}
                     />
                     <label htmlFor={uid + '-strategy'}>负载均衡类型</label>
@@ -367,9 +388,18 @@ function BalanceContent({
                         'round-robin',
                         'sticky-sessions',
                         'weighted-sticky',
-                      ].map((value) => ({ value }))}
+                      ].map((value) => ({
+                        value,
+                        label: value,
+                        disabled: value === 'weighted-sticky' && !!weightedIssue(g.name),
+                        reason: value === 'weighted-sticky' ? weightedIssue(g.name) : '',
+                      }))}
+                      optionRender={(option) => optionLabel(option.label, option.data.reason)}
                       onChange={(value) => {
+                        if (value === 'weighted-sticky' && weightedIssue(g.name)) return;
                         doc.setIn(['proxy-groups', g.index, 'strategy'], value);
+                        if (value !== 'weighted-sticky')
+                          doc.deleteIn(['proxy-groups', g.index, 'weighted-sticky']);
                         commit();
                       }}
                     />
@@ -382,16 +412,27 @@ function BalanceContent({
                     title="黑名单需要 weighted-sticky 策略"
                     action={
                       !readonly && (
-                        <Button
-                          onClick={() => {
-                            doc.setIn(['proxy-groups', g.index, 'strategy'], 'weighted-sticky');
-                            commit();
-                          }}
-                        >
-                          使用加权负载均衡
-                        </Button>
+                        <Tooltip title={weightedIssue(g.name)}>
+                          <span>
+                            <Button
+                              disabled={!!weightedIssue(g.name)}
+                              onClick={() => {
+                                doc.setIn(['proxy-groups', g.index, 'strategy'], 'weighted-sticky');
+                                commit();
+                              }}
+                            >
+                              使用加权负载均衡
+                            </Button>
+                          </span>
+                        </Tooltip>
                       )
                     }
+                  />
+                )}
+                {g.strategy === 'weighted-sticky' && (
+                  <Alert
+                    type="info"
+                    title="订阅生成时自动填入管理端权重、官方用户 UUID、面板 GUID 和检查接口；保存订阅前可点击“校验配置”查看最终 YAML。"
                   />
                 )}
                 <strong>黑名单规则</strong>
@@ -524,7 +565,8 @@ function BalanceContent({
             value={newGroup}
             options={groups
               .filter((g) => g.type !== 'load-balance')
-              .map((g) => ({ value: g.name }))}
+              .map((g) => groupOption(g.name, true))}
+            optionRender={(option) => optionLabel(option.label, option.data.reason)}
             onChange={(name) => {
               setNewGroup(name);
               addGroup(name);

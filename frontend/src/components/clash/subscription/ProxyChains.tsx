@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Dropdown, Tag } from 'antd';
 import { DeleteOutlined, ArrowDownOutlined, PlusOutlined } from '@ant-design/icons';
 import Sortable from 'sortablejs';
-import { templateDependencies, dependencyCycle } from '@/lib/clash/subscription/templateValidation';
+import { templateDependencies, dependencyCycle } from '@/lib/clash/subscription/template/validation';
 import '@/components/clash/subscription/Templates.css';
 
 interface Props {
@@ -140,8 +140,9 @@ export default function ProxyChains({ content, readonly, onChange, onValidityCha
     return chain.map((name, index) => {
       const kind = nodes.find((n) => n.name === name)?.kind;
       return (
-        <div key={name} data-chain-row>
+        <Fragment key={name}>
           <div
+            data-chain-row
             className={
               'proxy-chain-step ' +
               (index === 0 ? 'is-entry' : index === chain.length - 1 ? 'is-exit' : '')
@@ -196,7 +197,7 @@ export default function ProxyChains({ content, readonly, onChange, onValidityCha
               <ArrowDownOutlined aria-hidden />
             </div>
           )}
-        </div>
+        </Fragment>
       );
     });
   }

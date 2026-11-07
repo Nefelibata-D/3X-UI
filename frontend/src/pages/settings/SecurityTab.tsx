@@ -21,7 +21,7 @@ import { SettingListItem } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import TwoFactorModal from './TwoFactorModal';
-import PasskeyTab from './PasskeyTab';
+import PasskeyTab from '../../components/clash/passkey/SettingsTab';
 import './SecurityTab.css';
 
 interface ApiMsg<T = unknown> {

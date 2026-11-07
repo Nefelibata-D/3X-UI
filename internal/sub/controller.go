@@ -20,8 +20,7 @@ import (
 	"unicode"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
@@ -357,6 +356,7 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 	}
 	if a.clashEnabled {
 		gClash := g.Group(a.subClashPath, setNoCacheHeaders)
+		subscription.RegisterPublicSubscriptionRoutes(gClash.Group("/_project"))
 		gClash.GET(":subid", a.subClashs)
 		gClash.HEAD(":subid", a.subClashs)
 		if sameSubscriptionPath(a.subClashPath, subMihomoPath) {
@@ -544,7 +544,7 @@ func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
 		return
 	}
 	// Project: record the supported client sync separately from ordinary subscription access.
-	if err := clash.RecordClientSubscriptionSync(c.Param("subid"), c.Request.UserAgent()); err != nil {
+	if err := subscription.RecordClientSubscriptionSync(c.Param("subid"), c.Request.UserAgent()); err != nil {
 		logger.Warning("Failed to record Clash Verge subscription sync:", err)
 	}
 	if err := a.subService.RecordSubscriptionFetch(c.Param("subid")); err != nil {

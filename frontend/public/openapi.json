@@ -16349,7 +16349,7 @@
         "tags": [
           "Load Balancing Gateway"
         ],
-        "summary": "Validate a subscription draft after real node injection, including blacklist completeness and dialer cycles. Does not save.",
+        "summary": "Validate a subscription draft after proxy, weight, stable node identity and control injection. Returns the final YAML for preview; does not save or test network connectivity.",
         "operationId": "post_panel_api_clash_clients_id_subscription_validate",
         "parameters": [
           {
@@ -16376,7 +16376,10 @@
                     "msg": {
                       "type": "string"
                     },
-                    "obj": {}
+                    "obj": {
+                      "type": "string",
+                      "description": "Final rendered subscription YAML"
+                    }
                   }
                 }
               }
@@ -17029,6 +17032,115 @@
             "description": "Subscription generation failed."
           }
         }
+      }
+    },
+    "/{clashPath}_project/health": {
+      "get": {
+        "tags": [
+          "Subscription Server"
+        ],
+        "summary": "Public proxy health target: 204, Cache-Control: no-store. Also available as GET/HEAD <panelBasePath>/health. No account status is exposed.",
+        "operationId": "get_clashPath_project_health",
+        "parameters": [
+          {
+            "name": "clashPath",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Healthy; empty body"
+          }
+        },
+        "security": []
+      },
+      "head": {
+        "tags": [
+          "Subscription Server"
+        ],
+        "summary": "Public health target: identical 204 status without a response body.",
+        "operationId": "head_clashPath_project_health",
+        "parameters": [
+          {
+            "name": "clashPath",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Healthy; empty body"
+          }
+        },
+        "security": []
+      }
+    },
+    "/{clashPath}_project/v1/nodes/{node}/status": {
+      "get": {
+        "tags": [
+          "Subscription Server"
+        ],
+        "summary": "Bearer official user UUID; node is the stable panel GUID. Returns 200 normal, 409 grace, 403 disabled, 401 invalid credential, 404 unauthorized node or 503 unavailable policy. Also available under the panel base path.",
+        "operationId": "get_clashPath_project_v1_nodes_node_status",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "description": "Bearer <official user UUID>",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clashPath",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Normal; empty body"
+          },
+          "401": {
+            "description": "Invalid credential; empty body"
+          },
+          "403": {
+            "description": "Disabled; empty body"
+          },
+          "404": {
+            "description": "Node is not authorized; empty body"
+          },
+          "409": {
+            "description": "Grace; empty body"
+          },
+          "503": {
+            "description": "Policy is not confirmed applied; empty body"
+          }
+        },
+        "security": []
       }
     },
     "/{clashPath}{subid}": {

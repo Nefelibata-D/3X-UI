@@ -1,11 +1,14 @@
 package service
 
 import (
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 	"testing"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/allocation"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/catalog"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
 func TestNodeDelete_RemovesAttachedLocalCopies(t *testing.T) {
@@ -42,16 +45,16 @@ func TestNodeDelete_RemovesAttachedLocalCopies(t *testing.T) {
 	if err := db.Create(&xray.ClientTraffic{Email: client.Email, InboundId: inbound.Id, Up: 123}).Error; err != nil {
 		t.Fatal(err)
 	}
-	key := clash.NodeKey(node.Id)
-	if err := db.Create(&clash.NodeWeight{NodeKey: key, DefaultWeight: 2}).Error; err != nil {
+	key := catalog.NodeKey(node.Id)
+	if err := db.Create(&allocation.NodeWeight{NodeKey: key, DefaultWeight: 2}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&clash.Delivery{NodeKey: key, ClientID: client.Id}).Error; err != nil {
+	if err := db.Create(&policy.Delivery{NodeKey: key, ClientID: client.Id}).Error; err != nil {
 		t.Fatal(err)
 	}
-	weights, _ := clash.EncodeWeights(map[string]int64{key: 2, clash.LocalNodeKey: 1})
-	limits, _ := clash.EncodeWeights(map[string]int64{key: 100, clash.LocalNodeKey: 200})
-	ratio := clash.ClientRatio{ClientID: client.Id, Mode: clash.ModeCustom, WeightsRaw: weights, LimitsRaw: limits}
+	weights, _ := allocation.EncodeWeights(map[string]int64{key: 2, catalog.LocalNodeKey: 1})
+	limits, _ := allocation.EncodeWeights(map[string]int64{key: 100, catalog.LocalNodeKey: 200})
+	ratio := allocation.ClientRatio{ClientID: client.Id, Mode: allocation.ModeCustom, WeightsRaw: weights, LimitsRaw: limits}
 	if err := db.Create(&ratio).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +94,8 @@ func TestNodeDelete_RemovesAttachedLocalCopies(t *testing.T) {
 		{&model.ClientRecord{}, "id = ?", client.Id, 1},
 		{&model.ClientInbound{}, "inbound_id = ?", kept.Id, 1},
 		{&model.ClientInbound{}, "inbound_id = ?", inbound.Id, 0},
-		{&clash.NodeWeight{}, "node_key = ?", key, 0},
-		{&clash.Delivery{}, "node_key = ?", key, 0},
+		{&allocation.NodeWeight{}, "node_key = ?", key, 0},
+		{&policy.Delivery{}, "node_key = ?", key, 0},
 	} {
 		if err := db.Model(check.table).Where(check.query, check.arg).Count(&count).Error; err != nil {
 			t.Fatal(err)
@@ -114,7 +117,7 @@ func TestNodeDelete_RemovesAttachedLocalCopies(t *testing.T) {
 	if _, ok := ratio.Weights()[key]; ok {
 		t.Fatal("deleted-node weight remains")
 	}
-	if ratio.Limits()[clash.LocalNodeKey] != 200 || ratio.Weights()[clash.LocalNodeKey] != 1 {
+	if ratio.Limits()[catalog.LocalNodeKey] != 200 || ratio.Weights()[catalog.LocalNodeKey] != 1 {
 		t.Fatal("other-node settings changed")
 	}
 

@@ -8,7 +8,7 @@
 
 `go-webauthn/webauthn` 校验注册和登录，不自建密码账户。注册要求 resident key，登录要求用户验证（例如设备 PIN/生物识别）。挑战与 CSRF session 的哈希、Origin、操作类型、账户、配置版本绑定，五分钟过期，校验前原子消费，一次性使用；每个 session 每类仅保留一个待完成请求。注册还绑定账户 LoginEpoch。发现签名计数回退则拒绝；同步密钥的合法零计数由标准库按 WebAuthn 语义处理。凭据保存公钥及验证元数据，私钥保留在验证器中。Passkey 是独立登录方式，不再要求密码/TOTP；原密码与 TOTP 登录流程保留。
 
-最小上游接线：`clash/store.go` 调用本包迁移；`controller/api.go` 注册管理路由，`controller/index.go` 注册匿名登录路由；独立 `controller/passkey.go` 只承担 HTTP/session/CSRF、官方登录限速和成功日志通知。项目表为 `clash_passkey_config/accounts/credentials/ceremonies`，不写第二份账户凭据权威数据。API 登记在官方 endpoints.ts。
+最小上游接线：`clash/bootstrap.go` 调用本包迁移；`controller/api.go` 注册管理路由，`controller/index.go` 注册匿名登录路由；独立 `controller/passkey.go` 只承担 HTTP/session/CSRF、官方登录限速和成功日志通知。项目表为 `clash_passkey_config/accounts/credentials/ceremonies`，不写第二份账户凭据权威数据。API 登记在官方 endpoints.ts。
 
 定向测试在 `test/`，使用隔离 SQLite 和真实 ECDSA 签名，保持未跟踪。运行 `go test ./internal/clash/passkey/test`；本机使用根目录 `go-project.ps1`。测试覆盖域名变更清理、同域名保留、Origin/用户验证/签名/计数校验、session 绑定、一次性消费和跨用户删除拒绝。浏览器验证使用隔离面板与 Chromium 虚拟验证器，不能等同于实物 Windows Hello、手机或硬件密钥验收。
 

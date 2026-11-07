@@ -3,6 +3,10 @@
 package web
 
 import (
+	policy "github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
+)
+
+import (
 	"context"
 	"crypto/tls"
 	"embed"
@@ -19,7 +23,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgkern"
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -802,7 +806,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	if stopXray {
 		// Project: stop policy work before shutting down the core it controls.
-		clash.Stop()
+		policy.Stop()
 		if err := s.xrayService.StopXray(); err != nil && !errors.Is(err, service.ErrXrayNotRunning) {
 			err2 = common.Combine(err2, err)
 		}

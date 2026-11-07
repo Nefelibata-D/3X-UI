@@ -1,4 +1,4 @@
-import { replaceSymbol, templateSymbols } from '@/lib/clash/subscription/templateSymbols';
+import { replaceSymbol, templateSymbols } from '@/lib/clash/subscription/template/symbols';
 import ProxyChains from '@/components/clash/subscription/ProxyChains';
 import SortableTemplateRow, {
   SortableTemplateList,

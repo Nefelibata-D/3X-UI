@@ -3,9 +3,9 @@ package controller
 import (
 	"strconv"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
-
 	"github.com/gin-gonic/gin"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/allocation"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 )
 
 type ClashController struct {
@@ -32,34 +32,34 @@ func NewClashController(g *gin.RouterGroup) *ClashController {
 }
 
 func (a *ClashController) overview(c *gin.Context) {
-	cat, err := clash.LoadCatalogOrError()
+	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
 		jsonMsg(c, "load clash catalog", err)
 		return
 	}
-	out, err := clash.BuildOverview(cat)
+	out, err := policy.BuildOverview(cat)
 	jsonObj(c, out, err)
 }
 
 func (a *ClashController) saveWeights(c *gin.Context) {
 	var body struct {
-		Items []clash.NodeWeightInput `json:"items"`
+		Items []allocation.NodeWeightInput `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		jsonMsg(c, "invalid node weights", err)
 		return
 	}
-	cat, err := clash.LoadCatalogOrError()
+	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
 		jsonMsg(c, "load clash catalog", err)
 		return
 	}
-	if err := clash.SaveNodeWeights(cat, body.Items); err != nil {
+	if err := allocation.SaveNodeWeights(cat, body.Items); err != nil {
 		jsonMsg(c, "save node weights", err)
 		return
 	}
-	clash.TriggerSync()
-	out, err := clash.BuildOverview(cat)
+	policy.TriggerSync()
+	out, err := policy.BuildOverview(cat)
 	jsonObj(c, out, err)
 }
 
@@ -69,12 +69,12 @@ func (a *ClashController) clientRatio(c *gin.Context) {
 		jsonMsg(c, "invalid client id", err)
 		return
 	}
-	cat, err := clash.LoadCatalogOrError()
+	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
 		jsonMsg(c, "load clash catalog", err)
 		return
 	}
-	view, err := clash.LoadClientView(cat, id)
+	view, err := policy.LoadClientView(cat, id)
 	jsonObj(c, view, err)
 }
 
@@ -94,17 +94,17 @@ func (a *ClashController) saveClientRatio(c *gin.Context) {
 		jsonMsg(c, "invalid client ratio", err)
 		return
 	}
-	cat, err := clash.LoadCatalogOrError()
+	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
 		jsonMsg(c, "load clash catalog", err)
 		return
 	}
-	if err := clash.SaveClientRatio(cat, id, body.Mode, body.Weights, body.Limits, body.ResetMode); err != nil {
+	if err := allocation.SaveClientRatio(cat, id, body.Mode, body.Weights, body.Limits, body.ResetMode); err != nil {
 		jsonMsg(c, "save client ratio", err)
 		return
 	}
-	clash.TriggerSync()
-	view, err := clash.LoadClientView(cat, id)
+	policy.TriggerSync()
+	view, err := policy.LoadClientView(cat, id)
 	jsonObj(c, view, err)
 }
 
@@ -117,7 +117,7 @@ func (a *ClashController) resetPolicy(c *gin.Context) {
 		jsonMsg(c, "invalid reset request", err)
 		return
 	}
-	if err := clash.RequestReset(body.NodeKey, body.ClientID); err != nil {
+	if err := policy.RequestReset(body.NodeKey, body.ClientID); err != nil {
 		jsonMsg(c, "reset policy", err)
 		return
 	}
@@ -125,7 +125,7 @@ func (a *ClashController) resetPolicy(c *gin.Context) {
 }
 
 func (a *ClashController) sync(c *gin.Context) {
-	rt := clash.GetRuntime()
+	rt := policy.GetRuntime()
 	if rt == nil {
 		jsonMsg(c, "clash runtime is not configured", nil)
 		return
@@ -135,12 +135,12 @@ func (a *ClashController) sync(c *gin.Context) {
 }
 
 func (a *ClashController) applyPolicy(c *gin.Context) {
-	var req clash.ApplyRequest
+	var req policy.ApplyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, "invalid policy", err)
 		return
 	}
-	rt := clash.GetRuntime()
+	rt := policy.GetRuntime()
 	if rt == nil {
 		jsonMsg(c, "clash runtime is not configured", nil)
 		return
@@ -156,7 +156,7 @@ func (a *ClashController) reportPolicy(c *gin.Context) {
 		jsonMsg(c, "invalid report query", err)
 		return
 	}
-	rt := clash.GetRuntime()
+	rt := policy.GetRuntime()
 	if rt == nil {
 		jsonMsg(c, "clash runtime is not configured", nil)
 		return

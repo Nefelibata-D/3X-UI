@@ -3,8 +3,10 @@ package sub
 import (
 	"errors"
 	"fmt"
+
 	"github.com/goccy/go-yaml"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/catalog"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
 
@@ -16,12 +18,12 @@ type projectProxySource struct {
 	hostOverride bool
 }
 type projectSubscription struct {
-	binding *clash.SubscriptionBinding
+	binding *subscription.SubscriptionBinding
 	inspect bool
 	sources []projectProxySource
 }
 
-func (s *SubClashService) ProjectSubscription(subID, host string, binding *clash.SubscriptionBinding) (string, error) {
+func (s *SubClashService) ProjectSubscription(subID, host string, binding *subscription.SubscriptionBinding) (string, error) {
 	project := &projectSubscription{binding: binding, inspect: binding == nil}
 	body, _, err := s.getClashWithProject(subID, host, false, project)
 	if err == nil && body == "" {
@@ -43,16 +45,16 @@ func (p *projectSubscription) proxies(s *SubClashService, req *SubService, inbou
 			break
 		}
 	}
-	key := clash.LocalNodeKey
+	key := catalog.LocalNodeKey
 	if inbound.NodeID != nil {
-		key = clash.NodeKey(*inbound.NodeID)
+		key = catalog.NodeKey(*inbound.NodeID)
 	}
 	for _, item := range items {
-		p.sources = append(p.sources, projectProxySource{item, key, clash.InboundKey(inbound.Id), inbound.Remark, hostOverride})
+		p.sources = append(p.sources, projectProxySource{item, key, subscription.InboundKey(inbound.Id), inbound.Remark, hostOverride})
 	}
 	return items
 }
-func (p *projectSubscription) render(subID string, proxies []map[string]any, legacy bool) (string, bool, error) {
+func (p *projectSubscription) render(subID string, proxies []map[string]any, legacy bool, publicBaseURL string) (string, bool, error) {
 	if legacy {
 		return "", false, nil
 	}
@@ -85,14 +87,7 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 		body, err := yaml.Marshal(items)
 		return string(body), true, err
 	}
-	var config map[string]any
-	var bound bool
-	var err error
-	if p.binding != nil {
-		config, bound, err = clash.RenderSubscriptionBinding(*p.binding, actual, nodeKeys, inboundKeys)
-	} else {
-		config, bound, err = clash.RenderSubscription(subID, actual, nodeKeys, inboundKeys)
-	}
+	config, bound, err := subscription.RenderManagedSubscription(subID, p.binding, actual, nodeKeys, inboundKeys, publicBaseURL)
 	if err != nil {
 		return "", true, err
 	}
@@ -104,4 +99,14 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 	}
 	body, err := marshalClashYAML(config)
 	return string(body), true, err
+}
+
+// Use the official subscription URL builder so custom reverse-proxy prefixes are preserved.
+func (s *SubService) projectPublicBaseURL() string {
+	path, err := s.settingService.GetSubClashPath()
+	if err != nil {
+		return ""
+	}
+	_, _, address := s.BuildURLs("", "", path, "_project")
+	return address
 }

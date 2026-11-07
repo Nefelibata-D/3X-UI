@@ -245,6 +245,22 @@ func (rt *Runtime) Apply(req ApplyRequest) (PolicyReport, error) {
 	if _, ok := cat.ClientByEmail(req.ClientEmail); !ok {
 		return PolicyReport{}, ErrClientNotFound
 	}
+	// Remote ownership supersedes this panel's local policy for the same user.
+	rows, err := ListAppliedPolicies()
+	if err != nil {
+		return PolicyReport{}, err
+	}
+	for _, row := range rows {
+		if row.Removed || row.ClientEmail != req.ClientEmail || row.MasterGuid == cat.PanelGuid {
+			continue
+		}
+		if req.MasterGuid == cat.PanelGuid {
+			return rt.Report(row.MasterGuid, row.ClientID)
+		}
+		if row.MasterGuid != req.MasterGuid || row.ClientID != req.ClientID {
+			return PolicyReport{}, &ConflictError{Tag: firstManagedTag(row.ManagedInbounds()), Owner: policyKey(row.MasterGuid, row.ClientID)}
+		}
+	}
 	if existing != nil {
 		switch {
 		case existing.Removed:
@@ -266,6 +282,16 @@ func (rt *Runtime) Apply(req ApplyRequest) (PolicyReport, error) {
 		}
 	}
 
+	if req.MasterGuid != cat.PanelGuid {
+		for _, row := range rows {
+			if row.Removed || row.MasterGuid != cat.PanelGuid || row.ClientEmail != req.ClientEmail {
+				continue
+			}
+			if err := rt.removeExistingLocked(&row, row.Revision); err != nil {
+				return PolicyReport{}, err
+			}
+		}
+	}
 	managed := resolveManaged(cat, req.ClientEmail)
 	if err := rt.tagConflict(req.MasterGuid, req.ClientID, req.ClientEmail, managedTags(managed)); err != nil {
 		return PolicyReport{}, err
@@ -604,4 +630,11 @@ func (pr *PolicyRuntime) takeNeedsApply() bool {
 	}
 	pr.needsApply = false
 	return true
+}
+
+func firstManagedTag(managed []ManagedInbound) string {
+	if len(managed) == 0 {
+		return ""
+	}
+	return managed[0].Tag
 }

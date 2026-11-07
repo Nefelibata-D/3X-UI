@@ -73,6 +73,34 @@ func (rt *Runtime) SyncOnce(ctx context.Context) {
 		rt.setSync("error", err.Error())
 		return
 	}
+	owned, err := ListAppliedPolicies()
+	if err != nil {
+		rt.setSync("error", err.Error())
+		return
+	}
+	remoteUsers := make(map[string]bool)
+	for _, row := range owned {
+		if row.MasterGuid != cat.PanelGuid && !row.Removed {
+			remoteUsers[row.ClientEmail] = true
+		}
+	}
+	localPolicies := plan.Policies[:0]
+	for _, p := range plan.Policies {
+		if p.NodeKey == LocalNodeKey && remoteUsers[p.ClientEmail] {
+			continue
+		}
+		if p.NodeKey == LocalNodeKey {
+			for _, row := range owned {
+				if row.MasterGuid == cat.PanelGuid && row.ClientID == p.ClientID && row.Removed && p.Revision <= row.Revision {
+					p.Revision = row.Revision + 1
+					p.Status = DeliveryPending
+					p.LastError = ""
+				}
+			}
+		}
+		localPolicies = append(localPolicies, p)
+	}
+	plan.Policies = localPolicies
 	desired := make(map[string]DesiredPolicy, len(plan.Policies))
 	for _, p := range plan.Policies {
 		desired[deliveryKey(p.NodeKey, p.ClientID)] = p

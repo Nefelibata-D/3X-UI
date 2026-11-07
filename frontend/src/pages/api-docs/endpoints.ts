@@ -198,17 +198,80 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'clash-rulesets',
+    title: 'Clash rule sets',
+    endpoints: [
+      {
+        method: 'DELETE',
+        path: '/panel/api/clash/rulesets/:id',
+        summary:
+          'Delete a rule set. Template route and blacklist references must be removed first.',
+        params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Rule set ID.' }],
+      },
+    ],
+  },
+  {
     id: 'passkeys',
     title: 'Passkeys',
-    description: 'WebAuthn passkeys. Management requires an administrator browser session and CSRF; bearer tokens are rejected. One RP domain is shared by all administrators; changing it atomically deletes all credentials and pending ceremonies. Login requires user verification and creates the standard panel session.',
+    description:
+      'WebAuthn passkeys. Management requires an administrator browser session and CSRF; bearer tokens are rejected. One RP domain is shared by all administrators; changing it atomically deletes all credentials and pending ceremonies. Login requires user verification and creates the standard panel session.',
     endpoints: [
-      { method: 'GET', path: '/panel/api/clash/passkeys', security: [{ cookieAuth: [] }], summary: 'Get the configured domain and this administrator’s passkeys.' },
-      { method: 'POST', path: '/panel/api/clash/passkeys/domain', security: [{ cookieAuth: [] }], summary: 'Set the single domain; a different domain permanently revokes every passkey.', params: [{ name: 'domain', in: 'body (json)', type: 'string' }] },
-      { method: 'POST', path: '/panel/api/clash/passkeys/delete', security: [{ cookieAuth: [] }], summary: 'Delete a passkey belonging to the current administrator.', params: [{ name: 'id', in: 'body (json)', type: 'string' }] },
-      { method: 'POST', path: '/panel/api/clash/passkeys/register/begin', security: [{ cookieAuth: [] }], summary: 'Start registration; returns requestId and WebAuthn options. Origin must match the configured domain.' },
-      { method: 'POST', path: '/panel/api/clash/passkeys/register/finish', security: [{ cookieAuth: [] }], summary: 'Verify and store the passkey. Challenges expire after five minutes and can be consumed once.', params: [{ name: 'name', in: 'body (json)', type: 'string' }, { name: 'requestId', in: 'body (json)', type: 'string' }, { name: 'credential', in: 'body (json)', type: 'object' }] },
-      { method: 'POST', path: '/passkey/login/begin', security: [{ cookieAuth: [] }], summary: 'Start discoverable passkey login. Requires anonymous session CSRF and a matching Origin. Returns requestId and WebAuthn options.' },
-      { method: 'POST', path: '/passkey/login/finish', security: [{ cookieAuth: [] }], summary: 'Verify a user-verified WebAuthn assertion and create the normal panel session.', params: [{ name: 'requestId', in: 'body (json)', type: 'string' }, { name: 'credential', in: 'body (json)', type: 'object' }] },
+      {
+        method: 'GET',
+        path: '/panel/api/clash/passkeys',
+        security: [{ cookieAuth: [] }],
+        summary: 'Get the configured domain and this administrator’s passkeys.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/passkeys/domain',
+        security: [{ cookieAuth: [] }],
+        summary: 'Set the single domain; a different domain permanently revokes every passkey.',
+        params: [{ name: 'domain', in: 'body (json)', type: 'string' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/passkeys/delete',
+        security: [{ cookieAuth: [] }],
+        summary: 'Delete a passkey belonging to the current administrator.',
+        params: [{ name: 'id', in: 'body (json)', type: 'string' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/passkeys/register/begin',
+        security: [{ cookieAuth: [] }],
+        summary:
+          'Start registration; returns requestId and WebAuthn options. Origin must match the configured domain.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/passkeys/register/finish',
+        security: [{ cookieAuth: [] }],
+        summary:
+          'Verify and store the passkey. Challenges expire after five minutes and can be consumed once.',
+        params: [
+          { name: 'name', in: 'body (json)', type: 'string' },
+          { name: 'requestId', in: 'body (json)', type: 'string' },
+          { name: 'credential', in: 'body (json)', type: 'object' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/passkey/login/begin',
+        security: [{ cookieAuth: [] }],
+        summary:
+          'Start discoverable passkey login. Requires anonymous session CSRF and a matching Origin. Returns requestId and WebAuthn options.',
+      },
+      {
+        method: 'POST',
+        path: '/passkey/login/finish',
+        security: [{ cookieAuth: [] }],
+        summary: 'Verify a user-verified WebAuthn assertion and create the normal panel session.',
+        params: [
+          { name: 'requestId', in: 'body (json)', type: 'string' },
+          { name: 'credential', in: 'body (json)', type: 'object' },
+        ],
+      },
     ],
   },
   {
@@ -2735,15 +2798,36 @@ export const sections: readonly Section[] = [
     description:
       'Project node weights, per-client per-node quotas and ratio overrides and the child-side gateway policy API. The child apply/report routes are authenticated with the master node-sync token; the remaining routes use the admin session or an admin API token.',
     endpoints: [
-      { method: 'GET', path: '/panel/api/clash/clients/:id/subscription', summary: 'Get template binding, disabled inherited entries, YAML overrides and authorized node injection mappings for the official subscription identity.' },
-      { method: 'POST', path: '/panel/api/clash/clients/:id/subscription', summary: 'Save subscription binding. templateId=0 removes binding. Rule identity is type plus predicate; providers and groups replace by name. Shared SubID clients share this binding.' },
+      {
+        method: 'GET',
+        path: '/panel/api/clash/clients/:id/subscription',
+        summary:
+          'Get template binding, disabled inherited entries, YAML overrides and authorized node injection mappings for the official subscription identity.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/clients/:id/subscription',
+        summary:
+          'Save subscription binding. templateId=0 removes binding. Rule identity is type plus predicate; providers and groups replace by name. Shared SubID clients share this binding.',
+      },
       {
         method: 'DELETE',
         path: '/panel/api/clash/templates/:id',
-        summary: 'Delete a YAML subscription template by ID. Requires admin authentication and Clash subscriptions enabled.',
+        summary:
+          'Delete a YAML subscription template by ID. Requires admin authentication and Clash subscriptions enabled.',
       },
-      { method: 'GET', path: '/panel/api/clash/clients/:id/subscription/proxies', summary: 'List authorized proxies with their official generated Clash configurations and node keys for administrator subscription preview.' },
-      { method: 'POST', path: '/panel/api/clash/clients/:id/subscription/validate', summary: 'Validate a subscription draft after real node injection, including blacklist completeness and dialer cycles. Does not save.' },
+      {
+        method: 'GET',
+        path: '/panel/api/clash/clients/:id/subscription/proxies',
+        summary:
+          'List authorized proxies with their official generated Clash configurations and node keys for administrator subscription preview.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/clients/:id/subscription/validate',
+        summary:
+          'Validate a subscription draft after real node injection, including blacklist completeness and dialer cycles. Does not save.',
+      },
       {
         method: 'GET',
         path: '/panel/api/clash/overview',

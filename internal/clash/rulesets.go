@@ -211,3 +211,39 @@ func PublishedRules(id uint) ([]byte, error) {
 	}
 	return yaml.Marshal(map[string][]string{"payload": row.Rules})
 }
+
+func DeleteRuleSet(id uint) error {
+	if id == 0 {
+		return errors.New("规则集 ID 无效")
+	}
+	db, err := dbOrErr()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		var templates []YAMLTemplate
+		if err := tx.Find(&templates).Error; err != nil {
+			return err
+		}
+		for _, template := range templates {
+			for _, binding := range template.Injections.Routes {
+				if binding.RuleSetID == id {
+					return fmt.Errorf("规则集被模板 %q 的路由引用，请先解除引用", template.Name)
+				}
+			}
+			for _, binding := range template.Injections.Blacklists {
+				if binding.RuleSetID == id {
+					return fmt.Errorf("规则集被模板 %q 的黑名单引用，请先解除引用", template.Name)
+				}
+			}
+		}
+		result := tx.Delete(&RuleSet{}, id)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("规则集不存在")
+		}
+		return nil
+	})
+}

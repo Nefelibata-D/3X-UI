@@ -5023,6 +5023,10 @@
   ],
   "tags": [
     {
+      "name": "Clash rule sets",
+      "description": ""
+    },
+    {
       "name": "Passkeys",
       "description": "WebAuthn passkeys. Management requires an administrator browser session and CSRF; bearer tokens are rejected. One RP domain is shared by all administrators; changing it atomically deletes all credentials and pending ceremonies. Login requires user verification and creates the standard panel session."
     },
@@ -5084,6 +5088,47 @@
     }
   ],
   "paths": {
+    "/panel/api/clash/rulesets/{id}": {
+      "delete": {
+        "tags": [
+          "Clash rule sets"
+        ],
+        "summary": "Delete a rule set. Template route and blacklist references must be removed first.",
+        "operationId": "delete_panel_api_clash_rulesets_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Rule set ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/clash/passkeys": {
       "get": {
         "tags": [

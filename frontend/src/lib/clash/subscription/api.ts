@@ -46,6 +46,9 @@ export const fetchSubscriptionProxies = (id: number | undefined) =>
 export async function saveRuleSet(row: RuleSet) {
   success(await HttpUtil.post(root + '/rulesets', ruleSetSchema.parse(row), json));
 }
+export async function deleteRuleSet(id: number) {
+  success(await HttpUtil.delete(root + `/rulesets/${id}`, { silent: true }));
+}
 export async function importRules(content: string) {
   return z
     .array(z.string())

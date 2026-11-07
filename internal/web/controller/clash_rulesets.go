@@ -52,6 +52,13 @@ func registerRuleSets(admin *gin.RouterGroup) {
 		}
 		jsonObj(c, row, err)
 	})
+	g.DELETE("/:id", func(c *gin.Context) {
+		id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+		if err == nil {
+			err = clash.DeleteRuleSet(uint(id))
+		}
+		jsonObj(c, nil, err)
+	})
 	g.POST("/import", func(c *gin.Context) {
 		var in struct{ Content string }
 		if err := c.ShouldBindJSON(&in); err != nil {

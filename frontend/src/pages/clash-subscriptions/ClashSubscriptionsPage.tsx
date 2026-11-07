@@ -1,5 +1,5 @@
 import { blacklistRuleKinds } from '@/lib/clash/subscription/loadBalanceModel';
-import { EditOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
+import { EditOutlined, CopyOutlined, DownloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { Tag } from 'antd';
 import './RuleFilePreview.css';
 
@@ -11,7 +11,11 @@ import '@/styles/page-shell.css';
 import Templates from './Templates';
 import { useState, type UIEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { useClashRuleSets, useSaveClashRuleSet } from '@/api/queries/useClashSubscriptions';
+import {
+  useClashRuleSets,
+  useSaveClashRuleSet,
+  useDeleteClashRuleSet,
+} from '@/api/queries/useClashSubscriptions';
 import {
   message,
   Button,
@@ -21,6 +25,7 @@ import {
   Input,
   Modal,
   Select,
+  Popconfirm,
   Space,
   Tabs,
   Typography,
@@ -96,6 +101,7 @@ const scrollVisibility = {
 function Rules() {
   const list = useClashRuleSets();
   const saveMutation = useSaveClashRuleSet();
+  const deleteMutation = useDeleteClashRuleSet();
   const form = useForm<Row>({ defaultValues: blank });
   const row = useWatch({ control: form.control }) as Row;
   const [editing, edit] = useState(false);
@@ -150,14 +156,16 @@ function Rules() {
                     <Button
                       type="text"
                       size="small"
+                      aria-label="编辑"
+                      title="编辑"
                       icon={<EditOutlined aria-hidden />}
                       onClick={() => open(r)}
-                    >
-                      编辑
-                    </Button>
+                    />
                     <Button
                       type="text"
                       size="small"
+                      aria-label="复制"
+                      title="复制"
                       icon={<CopyOutlined aria-hidden />}
                       onClick={async () => {
                         try {
@@ -167,18 +175,42 @@ function Rules() {
                           message.error('复制失败');
                         }
                       }}
-                    >
-                      复制
-                    </Button>
+                    />
                     <Button
                       type="link"
                       size="small"
+                      aria-label="下载"
+                      title="下载"
                       icon={<DownloadOutlined aria-hidden />}
                       href={url(r)}
                       download={r.filename}
+                    />
+                    <Popconfirm
+                      title={`删除规则集“${r.name}”？`}
+                      description="删除后发布链接将失效。"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={async () => {
+                        try {
+                          await deleteMutation.mutateAsync(r.id);
+                          message.success('规则集已删除');
+                        } catch (e) {
+                          message.error(String(e));
+                        }
+                      }}
                     >
-                      下载
-                    </Button>
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        aria-label="删除"
+                        title="删除"
+                        icon={<DeleteOutlined aria-hidden />}
+                        loading={deleteMutation.isPending && deleteMutation.variables === r.id}
+                        disabled={deleteMutation.isPending}
+                      />
+                    </Popconfirm>
                   </Space>
                 }
               >

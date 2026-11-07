@@ -47,6 +47,13 @@ export function useSaveClashRuleSet() {
     onSuccess: () => cache.invalidateQueries({ queryKey: keys.clash.rulesets() }),
   });
 }
+export function useDeleteClashRuleSet() {
+  const cache = useQueryClient();
+  return useMutation({
+    mutationFn: api.deleteRuleSet,
+    onSuccess: () => cache.invalidateQueries({ queryKey: keys.clash.rulesets() }),
+  });
+}
 export function useClashTemplateMutations() {
   const cache = useQueryClient();
   const invalidate = () =>

@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 	"sort"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 )
 
 type DesiredPolicy struct {
@@ -23,8 +24,6 @@ type DesiredPolicy struct {
 	BudgetBytes        int64                 `json:"budgetBytes"`
 	GraceSeconds       int64                 `json:"graceSeconds"`
 	GracePercent       int64                 `json:"gracePercent"`
-	ActivitySeconds    int64                 `json:"activitySeconds,omitempty"`
-	SiteGroups         []gateway.SiteGroup   `json:"siteGroups,omitempty"`
 	EffectiveRatio     float64               `json:"effectiveRatio"`
 	PeriodTimezone     string                `json:"periodTimezone"`
 	Reset              bool                  `json:"reset"`
@@ -191,25 +190,21 @@ func payloadHash(p DesiredPolicy) string {
 		BudgetBytes        int64                 `json:"budgetBytes"`
 		GraceSeconds       int64                 `json:"graceSeconds"`
 		GracePercent       int64                 `json:"gracePercent"`
-		ActivitySeconds    int64                 `json:"activitySeconds"`
-		SiteGroups         []gateway.SiteGroup   `json:"siteGroups"`
 		EffectiveRatio     float64               `json:"effectiveRatio"`
 		PeriodTimezone     string                `json:"periodTimezone"`
 		Remove             bool                  `json:"remove"`
 	}{
 		ResetSchedule: p.ResetSchedule, AllocationRequired: p.AllocationRequired,
-		MasterGuid:      p.MasterGuid,
-		TargetGuid:      p.NodeGuid,
-		ClientID:        p.ClientID,
-		ClientEmail:     p.ClientEmail,
-		BudgetBytes:     p.BudgetBytes,
-		GraceSeconds:    p.GraceSeconds,
-		GracePercent:    p.GracePercent,
-		ActivitySeconds: p.ActivitySeconds,
-		SiteGroups:      p.SiteGroups,
-		EffectiveRatio:  p.EffectiveRatio,
-		PeriodTimezone:  p.PeriodTimezone,
-		Remove:          p.Remove,
+		MasterGuid:     p.MasterGuid,
+		TargetGuid:     p.NodeGuid,
+		ClientID:       p.ClientID,
+		ClientEmail:    p.ClientEmail,
+		BudgetBytes:    p.BudgetBytes,
+		GraceSeconds:   p.GraceSeconds,
+		GracePercent:   p.GracePercent,
+		EffectiveRatio: p.EffectiveRatio,
+		PeriodTimezone: p.PeriodTimezone,
+		Remove:         p.Remove,
 	}
 	b, _ := json.Marshal(payload)
 	sum := sha256.Sum256(b)

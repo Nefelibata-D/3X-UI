@@ -3,9 +3,14 @@ package clash
 import (
 	"context"
 	"errors"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+
 	"gorm.io/gorm"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 )
+
+// Keep IN queries below SQLite's parameter limit, including the state predicates.
+const resetClientBatchSize = 400
 
 func RequestReset(nodeKey string, clientID int) error {
 	rt := GetRuntime()
@@ -33,6 +38,15 @@ func RequestReset(nodeKey string, clientID int) error {
 }
 
 func RequestClientReset(clientID int) error {
+	return RequestClientResets([]int{clientID})
+}
+
+// RequestClientResets durably queues one reset per client/node ledger.
+// Repeated requests while delivery is pending keep the same reset revision.
+func RequestClientResets(clientIDs []int) error {
+	if len(clientIDs) == 0 {
+		return nil
+	}
 	db, err := dbOrErr()
 	if err != nil {
 		return err
@@ -42,12 +56,23 @@ func RequestClientReset(clientID int) error {
 		rt.syncMu.Lock()
 		defer rt.syncMu.Unlock()
 	}
-	result := db.Model(&Delivery{}).Where("client_id = ? AND remove = ? AND reset_pending = ?", clientID, false, false).
-		Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "reset_pending": true, "status": DeliveryPending, "last_error": ""})
-	if result.Error != nil {
-		return result.Error
+	var changed int64
+	err = db.Transaction(func(tx *gorm.DB) error {
+		for start := 0; start < len(clientIDs); start += resetClientBatchSize {
+			end := min(start+resetClientBatchSize, len(clientIDs))
+			result := tx.Model(&Delivery{}).Where("client_id IN ? AND remove = ? AND reset_pending = ?", clientIDs[start:end], false, false).
+				Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "reset_pending": true, "status": DeliveryPending, "last_error": ""})
+			if result.Error != nil {
+				return result.Error
+			}
+			changed += result.RowsAffected
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	if result.RowsAffected > 0 {
+	if changed > 0 {
 		TriggerSync()
 	}
 	return nil

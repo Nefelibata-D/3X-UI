@@ -3,9 +3,10 @@ package clash
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 	"sort"
 	"time"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 )
 
 type NodeOverview struct {
@@ -45,7 +46,6 @@ type PolicyOverview struct {
 	GraceStartedAt    int64            `json:"graceStartedAt"`
 	GraceDeadline     int64            `json:"graceDeadline"`
 	GraceExtraBytes   int64            `json:"graceExtraBytes"`
-	GraceSnapshot     []string         `json:"graceSnapshot,omitempty"`
 	GatewayPort       int              `json:"gatewayPort"`
 	GatewayListening  bool             `json:"gatewayListening"`
 	ActiveConnections int              `json:"activeConnections"`
@@ -62,8 +62,7 @@ type Overview struct {
 	GeneratedAt int64            `json:"generatedAt"`
 	Nodes       []NodeOverview   `json:"nodes"`
 	Policies    []PolicyOverview `json:"policies"`
-	Sync        SyncStatus       `json:"sync"
- "gorm.io/gorm"`
+	Sync        SyncStatus       `json:"sync"`
 }
 
 type ClientNodeView struct {
@@ -279,7 +278,6 @@ func BuildOverview(cat *Catalog) (Overview, error) {
 				view.GraceStartedAt = report.GraceStartedAt
 				view.GraceDeadline = report.GraceDeadline
 				view.GraceExtraBytes = report.GraceExtraBytes
-				view.GraceSnapshot = report.GraceSnapshot
 				view.GatewayPort = report.GatewayPort
 				view.GatewayListening = report.GatewayListening
 				view.ActiveConnections = report.ActiveConnections
@@ -317,7 +315,6 @@ func BuildOverview(cat *Catalog) (Overview, error) {
 			GraceStartedAt:  report.GraceStartedAt,
 			GraceDeadline:   report.GraceDeadline,
 			GraceExtraBytes: report.GraceExtraBytes,
-			GraceSnapshot:   report.GraceSnapshot,
 			GatewayPort:     report.GatewayPort,
 			ManagedInbounds: report.ManagedInbounds,
 			Applied:         report.Applied,

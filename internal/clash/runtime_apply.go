@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
-
 	"gorm.io/gorm"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 )
 
 var (
@@ -31,8 +31,6 @@ type ApplyRequest struct {
 	BudgetBytes        int64                 `json:"budgetBytes"`
 	GraceSeconds       int64                 `json:"graceSeconds"`
 	GracePercent       int64                 `json:"gracePercent"`
-	ActivitySeconds    int64                 `json:"activitySeconds,omitempty"`
-	SiteGroups         []gateway.SiteGroup   `json:"siteGroups,omitempty"`
 	EffectiveRatio     float64               `json:"effectiveRatio"`
 	PeriodTimezone     string                `json:"periodTimezone"`
 	Reset              bool                  `json:"reset"`
@@ -66,47 +64,42 @@ func (r ApplyRequest) Validate() error {
 
 func (r ApplyRequest) config() gateway.Config {
 	return gateway.Config{
-		BudgetBytes:     r.BudgetBytes,
-		GraceSeconds:    r.GraceSeconds,
-		GracePercent:    r.GracePercent,
-		ActivitySeconds: r.ActivitySeconds,
-		SiteGroups:      append([]gateway.SiteGroup(nil), r.SiteGroups...),
-		ResetSchedule:   r.ResetSchedule, AllocationRequired: r.AllocationRequired,
+		BudgetBytes:   r.BudgetBytes,
+		GraceSeconds:  r.GraceSeconds,
+		GracePercent:  r.GracePercent,
+		ResetSchedule: r.ResetSchedule, AllocationRequired: r.AllocationRequired,
 		PeriodTimezone: r.PeriodTimezone,
 	}
 }
 
 type PolicyReport struct {
-	MasterGuid        string              `json:"masterGuid"`
-	ClientID          int                 `json:"clientId"`
-	ClientEmail       string              `json:"clientEmail"`
-	Revision          int64               `json:"revision"`
-	State             string              `json:"state"`
-	BudgetBytes       int64               `json:"budgetBytes"`
-	GraceSeconds      int64               `json:"graceSeconds"`
-	GracePercent      int64               `json:"gracePercent"`
-	ActivitySeconds   int64               `json:"activitySeconds,omitempty"`
-	SiteGroups        []gateway.SiteGroup `json:"siteGroups,omitempty"`
-	EffectiveRatio    float64             `json:"effectiveRatio"`
-	UsageUp           int64               `json:"usageUp"`
-	UsageDown         int64               `json:"usageDown"`
-	PeriodStart       int64               `json:"periodStart"`
-	PeriodEnd         int64               `json:"periodEnd"`
-	GraceStartedAt    int64               `json:"graceStartedAt"`
-	GraceDeadline     int64               `json:"graceDeadline"`
-	GraceExtraBytes   int64               `json:"graceExtraBytes"`
-	GraceSnapshot     []string            `json:"graceSnapshot,omitempty"`
-	GatewayPort       int                 `json:"gatewayPort"`
-	GatewayListening  bool                `json:"gatewayListening"`
-	ActiveConnections int                 `json:"activeConnections"`
-	ManagedInbounds   []ManagedInbound    `json:"managedInbounds"`
-	Applied           bool                `json:"applied"`
-	ApplyError        string              `json:"applyError"`
-	AppliedAt         int64               `json:"appliedAt"`
-	DisabledAt        int64               `json:"disabledAt"`
-	LastError         string              `json:"lastError,omitempty"`
-	Removing          bool                `json:"removing,omitempty"`
-	Removed           bool                `json:"removed,omitempty"`
+	MasterGuid        string           `json:"masterGuid"`
+	ClientID          int              `json:"clientId"`
+	ClientEmail       string           `json:"clientEmail"`
+	Revision          int64            `json:"revision"`
+	State             string           `json:"state"`
+	BudgetBytes       int64            `json:"budgetBytes"`
+	GraceSeconds      int64            `json:"graceSeconds"`
+	GracePercent      int64            `json:"gracePercent"`
+	EffectiveRatio    float64          `json:"effectiveRatio"`
+	UsageUp           int64            `json:"usageUp"`
+	UsageDown         int64            `json:"usageDown"`
+	PeriodStart       int64            `json:"periodStart"`
+	PeriodEnd         int64            `json:"periodEnd"`
+	GraceStartedAt    int64            `json:"graceStartedAt"`
+	GraceDeadline     int64            `json:"graceDeadline"`
+	GraceExtraBytes   int64            `json:"graceExtraBytes"`
+	GatewayPort       int              `json:"gatewayPort"`
+	GatewayListening  bool             `json:"gatewayListening"`
+	ActiveConnections int              `json:"activeConnections"`
+	ManagedInbounds   []ManagedInbound `json:"managedInbounds"`
+	Applied           bool             `json:"applied"`
+	ApplyError        string           `json:"applyError"`
+	AppliedAt         int64            `json:"appliedAt"`
+	DisabledAt        int64            `json:"disabledAt"`
+	LastError         string           `json:"lastError,omitempty"`
+	Removing          bool             `json:"removing,omitempty"`
+	Removed           bool             `json:"removed,omitempty"`
 }
 
 func (pr *PolicyRuntime) report() PolicyReport {
@@ -121,8 +114,6 @@ func (pr *PolicyRuntime) report() PolicyReport {
 		budget     int64
 		graceSecs  int64
 		gracePct   int64
-		activity   int64
-		groups     []gateway.SiteGroup
 		port       int
 		listening  bool
 		applied    bool
@@ -137,8 +128,6 @@ func (pr *PolicyRuntime) report() PolicyReport {
 		budget:     pr.budget,
 		graceSecs:  pr.graceSecs,
 		gracePct:   pr.gracePct,
-		activity:   pr.activity,
-		groups:     append([]gateway.SiteGroup(nil), pr.siteGroups...),
 		port:       pr.port,
 		listening:  pr.server != nil,
 		applied:    pr.applied,
@@ -155,8 +144,6 @@ func (pr *PolicyRuntime) report() PolicyReport {
 		BudgetBytes:      cfg.budget,
 		GraceSeconds:     cfg.graceSecs,
 		GracePercent:     cfg.gracePct,
-		ActivitySeconds:  cfg.activity,
-		SiteGroups:       cfg.groups,
 		EffectiveRatio:   cfg.ratio,
 		GatewayPort:      cfg.port,
 		GatewayListening: cfg.listening,
@@ -175,7 +162,6 @@ func (pr *PolicyRuntime) report() PolicyReport {
 		out.GraceStartedAt = r.GraceStartedAt
 		out.GraceDeadline = r.GraceDeadline
 		out.GraceExtraBytes = r.GraceExtraBytes
-		out.GraceSnapshot = r.GraceSnapshot
 		out.ActiveConnections = r.ActiveConnections
 		out.DisabledAt = r.DisabledAt
 		out.LastError = r.LastError
@@ -184,7 +170,6 @@ func (pr *PolicyRuntime) report() PolicyReport {
 }
 
 func reportFromRow(row AppliedPolicy) PolicyReport {
-	groups := row.SiteGroups()
 	out := PolicyReport{
 		MasterGuid:      row.MasterGuid,
 		ClientID:        row.ClientID,
@@ -194,8 +179,6 @@ func reportFromRow(row AppliedPolicy) PolicyReport {
 		BudgetBytes:     row.BudgetBytes,
 		GraceSeconds:    row.GraceSeconds,
 		GracePercent:    row.GracePercent,
-		ActivitySeconds: row.ActivitySeconds,
-		SiteGroups:      groups,
 		EffectiveRatio:  row.EffectiveRatio,
 		UsageUp:         row.UsageUp,
 		UsageDown:       row.UsageDown,
@@ -204,7 +187,6 @@ func reportFromRow(row AppliedPolicy) PolicyReport {
 		GraceStartedAt:  row.GraceStartedAt,
 		GraceDeadline:   row.GraceDeadline,
 		GraceExtraBytes: row.GraceExtraBytes,
-		GraceSnapshot:   row.GraceSnapshot(),
 		GatewayPort:     row.GatewayPort,
 		ManagedInbounds: row.ManagedInbounds(),
 		Applied:         false,
@@ -284,16 +266,7 @@ func (rt *Runtime) Apply(req ApplyRequest) (PolicyReport, error) {
 		}
 	}
 
-	var previous []ManagedInbound
-	if existing != nil {
-		previous = existing.ManagedInbounds()
-		if pr := rt.findPolicy(req.MasterGuid, req.ClientID); pr != nil {
-			pr.mu.Lock()
-			previous = append([]ManagedInbound(nil), pr.managed...)
-			pr.mu.Unlock()
-		}
-	}
-	managed := resolveManaged(cat, req.ClientEmail, previous)
+	managed := resolveManaged(cat, req.ClientEmail)
 	if err := rt.tagConflict(req.MasterGuid, req.ClientID, req.ClientEmail, managedTags(managed)); err != nil {
 		return PolicyReport{}, err
 	}
@@ -315,17 +288,15 @@ func managedTags(managed []ManagedInbound) []string {
 
 func (rt *Runtime) createPolicyLocked(cat *Catalog, req ApplyRequest, managed []ManagedInbound) (PolicyReport, error) {
 	row := &AppliedPolicy{
-		MasterGuid:      req.MasterGuid,
-		ClientID:        req.ClientID,
-		ClientEmail:     req.ClientEmail,
-		Revision:        req.Revision,
-		BudgetBytes:     req.BudgetBytes,
-		GraceSeconds:    req.GraceSeconds,
-		GracePercent:    req.GracePercent,
-		ActivitySeconds: req.ActivitySeconds,
-		SiteGroupsJSON:  EncodeSiteGroups(req.SiteGroups),
-		EffectiveRatio:  req.EffectiveRatio,
-		ResetSchedule:   req.ResetSchedule, AllocationRequired: req.AllocationRequired,
+		MasterGuid:     req.MasterGuid,
+		ClientID:       req.ClientID,
+		ClientEmail:    req.ClientEmail,
+		Revision:       req.Revision,
+		BudgetBytes:    req.BudgetBytes,
+		GraceSeconds:   req.GraceSeconds,
+		GracePercent:   req.GracePercent,
+		EffectiveRatio: req.EffectiveRatio,
+		ResetSchedule:  req.ResetSchedule, AllocationRequired: req.AllocationRequired,
 		PeriodTimezone: req.PeriodTimezone,
 		State:          string(gateway.StateNormal),
 	}
@@ -343,8 +314,6 @@ func (rt *Runtime) createPolicyLocked(cat *Catalog, req ApplyRequest, managed []
 		budget:      req.BudgetBytes,
 		graceSecs:   req.GraceSeconds,
 		gracePct:    req.GracePercent,
-		activity:    req.ActivitySeconds,
-		siteGroups:  append([]gateway.SiteGroup(nil), req.SiteGroups...),
 		timezone:    req.PeriodTimezone,
 		managed:     managed,
 		needsApply:  true,
@@ -368,10 +337,10 @@ func (rt *Runtime) createPolicyLocked(cat *Catalog, req ApplyRequest, managed []
 		}
 	}
 	if err := rt.startServer(pr); err != nil {
-		rt.reconcilePolicyLocked(pr, cat, true, true)
+		rt.reconcilePolicyLocked(pr, cat, true)
 		return pr.report(), err
 	}
-	rt.reconcilePolicyLocked(pr, cat, true, true)
+	rt.reconcilePolicyLocked(pr, cat, true)
 	return pr.report(), nil
 }
 
@@ -386,8 +355,6 @@ func (rt *Runtime) updatePolicyLocked(cat *Catalog, row AppliedPolicy, req Apply
 	next.BudgetBytes = req.BudgetBytes
 	next.GraceSeconds = req.GraceSeconds
 	next.GracePercent = req.GracePercent
-	next.ActivitySeconds = req.ActivitySeconds
-	next.SiteGroupsJSON = EncodeSiteGroups(req.SiteGroups)
 	next.EffectiveRatio = req.EffectiveRatio
 	next.PeriodTimezone = req.PeriodTimezone
 	next.ResetSchedule = req.ResetSchedule
@@ -427,8 +394,6 @@ func (rt *Runtime) updatePolicyLocked(cat *Catalog, row AppliedPolicy, req Apply
 		pr.budget = req.BudgetBytes
 		pr.graceSecs = req.GraceSeconds
 		pr.gracePct = req.GracePercent
-		pr.activity = req.ActivitySeconds
-		pr.siteGroups = append([]gateway.SiteGroup(nil), req.SiteGroups...)
 		pr.timezone = req.PeriodTimezone
 		pr.removing = false
 		pr.mu.Unlock()
@@ -438,7 +403,7 @@ func (rt *Runtime) updatePolicyLocked(cat *Catalog, row AppliedPolicy, req Apply
 	}
 	if pr.server == nil {
 		if err := rt.startServer(pr); err != nil {
-			rt.reconcilePolicyLocked(pr, cat, true, true)
+			rt.reconcilePolicyLocked(pr, cat, true)
 			return pr.report(), err
 		}
 	}
@@ -448,7 +413,7 @@ func (rt *Runtime) updatePolicyLocked(cat *Catalog, row AppliedPolicy, req Apply
 			return pr.report(), err
 		}
 	}
-	rt.reconcilePolicyLocked(pr, cat, true, true)
+	rt.reconcilePolicyLocked(pr, cat, true)
 	return pr.report(), nil
 }
 
@@ -568,32 +533,16 @@ func (rt *Runtime) removeExistingLocked(existing *AppliedPolicy, revision int64)
 		pr.mu.Unlock()
 	}
 
-	var errs []string
-	for i := range managed {
-		if !managed[i].DisabledByGateway {
-			continue
-		}
-		if err := rt.setInbound(managed[i].Tag, true); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", managed[i].Tag, err))
-			continue
-		}
-		managed[i].Enabled = true
-		managed[i].DisabledByGateway = false
-	}
-	if len(errs) == 0 && rt.hooks.ApplyXray != nil {
+	if rt.hooks.ApplyXray != nil {
 		if err := rt.hooks.ApplyXray(); err != nil {
-			errs = append(errs, "apply xray: "+err.Error())
+			if pr != nil {
+				pr.mu.Lock()
+				pr.applyError = "apply xray: " + err.Error()
+				pr.applied = false
+				pr.mu.Unlock()
+			}
+			return fmt.Errorf("apply xray: %w", err)
 		}
-	}
-	if len(errs) > 0 {
-		errText := strings.Join(errs, "; ")
-		if pr != nil {
-			pr.mu.Lock()
-			pr.applyError = errText
-			pr.applied = false
-			pr.mu.Unlock()
-		}
-		return errors.New(errText)
 	}
 	if err := FinishAppliedRemoval(existing.ID, revision, managed); err != nil {
 		if pr != nil {
@@ -643,8 +592,6 @@ func samePolicy(row AppliedPolicy, req ApplyRequest) bool {
 		row.BudgetBytes == req.BudgetBytes &&
 		row.GraceSeconds == req.GraceSeconds &&
 		row.GracePercent == req.GracePercent &&
-		row.ActivitySeconds == req.ActivitySeconds &&
-		row.SiteGroupsJSON == EncodeSiteGroups(req.SiteGroups) &&
 		row.EffectiveRatio == req.EffectiveRatio &&
 		row.PeriodTimezone == req.PeriodTimezone
 }

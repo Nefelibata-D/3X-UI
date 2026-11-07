@@ -134,7 +134,7 @@ func (c *Catalog) ClientsOnNode(nodeKey string) []ClientInfo {
 
 // ManagedInbound is the child-side description of an official inbound that
 // carries a managed client. It is recomputed from official data on every
-// reconcile; only DisabledByGateway and the port check are project state.
+// reconcile; quota enforcement does not change upstream inbound state.
 
 func RatioMap(rows []ClientRatio) map[int]ClientRatio {
 	out := make(map[int]ClientRatio, len(rows))

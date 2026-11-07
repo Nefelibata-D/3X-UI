@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/passkey"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
-
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 func Migrate() error {
@@ -219,8 +219,6 @@ func UpdateAppliedConfig(id int, row AppliedPolicy) error {
 		"budget_bytes":         row.BudgetBytes,
 		"grace_seconds":        row.GraceSeconds,
 		"grace_percent":        row.GracePercent,
-		"activity_seconds":     row.ActivitySeconds,
-		"site_groups_json":     row.SiteGroupsJSON,
 		"effective_ratio":      row.EffectiveRatio,
 		"period_timezone":      row.PeriodTimezone,
 		"allocation_required":  row.AllocationRequired,
@@ -286,23 +284,20 @@ func SaveAppliedLedger(id int, st gateway.PersistedState) error {
 	if err != nil {
 		return err
 	}
-	snapshot, _ := json.Marshal(st.GraceSnapshot)
 	return db.Model(&AppliedPolicy{}).Where("id = ?", id).Updates(map[string]any{
 		"reset_applied_revision": st.ResetRevision,
 		"ledger_reset_day":       st.ResetSchedule.Day, "ledger_reset_minute": st.ResetSchedule.Minute, "ledger_reset_disabled": st.ResetSchedule.Disabled, "ledger_period_timezone": st.PeriodTimezone,
-		"grace_groups_json":   EncodeSiteGroups(st.GraceGroups),
-		"state":               string(st.State),
-		"usage_up":            st.UsageUp,
-		"usage_down":          st.UsageDown,
-		"period_start":        st.PeriodStart,
-		"period_end":          st.PeriodEnd,
-		"grace_started_at":    st.GraceStartedAt,
-		"grace_deadline":      st.GraceDeadline,
-		"grace_extra_bytes":   st.GraceExtraBytes,
-		"grace_baseline":      st.GraceBaseline,
-		"grace_snapshot_json": string(snapshot),
-		"disabled_at":         st.DisabledAt,
-		"updated_at":          nowMillis(),
+		"state":             string(st.State),
+		"usage_up":          st.UsageUp,
+		"usage_down":        st.UsageDown,
+		"period_start":      st.PeriodStart,
+		"period_end":        st.PeriodEnd,
+		"grace_started_at":  st.GraceStartedAt,
+		"grace_deadline":    st.GraceDeadline,
+		"grace_extra_bytes": st.GraceExtraBytes,
+		"grace_baseline":    st.GraceBaseline,
+		"disabled_at":       st.DisabledAt,
+		"updated_at":        nowMillis(),
 	}).Error
 }
 
@@ -310,7 +305,6 @@ func AppliedPolicyByGatewayState(row AppliedPolicy) gateway.PersistedState {
 	return gateway.PersistedState{
 		ResetSchedule: row.LedgerResetSchedule, PeriodTimezone: row.LedgerPeriodTimezone,
 		ResetRevision:   row.ResetAppliedRevision,
-		GraceGroups:     row.GraceGroups(),
 		State:           gateway.State(row.State),
 		UsageUp:         row.UsageUp,
 		UsageDown:       row.UsageDown,
@@ -320,7 +314,6 @@ func AppliedPolicyByGatewayState(row AppliedPolicy) gateway.PersistedState {
 		GraceDeadline:   row.GraceDeadline,
 		GraceExtraBytes: row.GraceExtraBytes,
 		GraceBaseline:   row.GraceBaseline,
-		GraceSnapshot:   row.GraceSnapshot(),
 		DisabledAt:      row.DisabledAt,
 	}
 }

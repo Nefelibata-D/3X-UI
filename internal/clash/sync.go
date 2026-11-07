@@ -122,18 +122,16 @@ func (rt *Runtime) syncPolicy(ctx context.Context, cat *Catalog, p DesiredPolicy
 		return
 	}
 	req := ApplyRequest{
-		MasterGuid:      cat.PanelGuid,
-		TargetGuid:      p.NodeGuid,
-		ClientID:        p.ClientID,
-		ClientEmail:     p.ClientEmail,
-		Revision:        p.Revision,
-		BudgetBytes:     p.BudgetBytes,
-		GraceSeconds:    p.GraceSeconds,
-		GracePercent:    p.GracePercent,
-		ActivitySeconds: p.ActivitySeconds,
-		SiteGroups:      p.SiteGroups,
-		EffectiveRatio:  p.EffectiveRatio,
-		ResetSchedule:   p.ResetSchedule, AllocationRequired: p.AllocationRequired,
+		MasterGuid:     cat.PanelGuid,
+		TargetGuid:     p.NodeGuid,
+		ClientID:       p.ClientID,
+		ClientEmail:    p.ClientEmail,
+		Revision:       p.Revision,
+		BudgetBytes:    p.BudgetBytes,
+		GraceSeconds:   p.GraceSeconds,
+		GracePercent:   p.GracePercent,
+		EffectiveRatio: p.EffectiveRatio,
+		ResetSchedule:  p.ResetSchedule, AllocationRequired: p.AllocationRequired,
 		PeriodTimezone: p.PeriodTimezone,
 		Reset:          p.Reset,
 	}

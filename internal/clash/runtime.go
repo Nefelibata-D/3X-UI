@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
@@ -16,8 +15,6 @@ import (
 )
 
 type Hooks struct {
-	// SetInboundEnabled only restores inbounds disabled by older gateway versions.
-	SetInboundEnabled func(tag string, enabled bool) error
 	// ApplyXray reconciles the running Xray config after routing/inbound
 	// changes. It is the upstream XrayService.RestartXray(false) path.
 	ApplyXray func() error
@@ -36,9 +33,7 @@ type PolicyRuntime struct {
 	budget      int64
 	graceSecs   int64
 	gracePct    int64
-	activity    int64
 	timezone    string
-	siteGroups  []gateway.SiteGroup
 
 	port   int
 	server *gateway.Server
@@ -158,7 +153,7 @@ func (rt *Runtime) start(ctx context.Context) error {
 		}
 	}
 	rt.resumeRemovals()
-	rt.reconcileAll(false, false)
+	rt.reconcileAll(false)
 	rt.started = true
 	rt.wg.Add(2)
 	go rt.loop()
@@ -207,12 +202,12 @@ func (rt *Runtime) loop() {
 		case <-rt.done:
 			return
 		case <-rt.wake:
-			rt.reconcileAll(true, true)
+			rt.reconcileAll(true)
 		case <-tick.C:
 			rt.tickPolicies()
 		case <-reconcile.C:
 			rt.resumeRemovals()
-			rt.reconcileAll(true, true)
+			rt.reconcileAll(true)
 		}
 	}
 }
@@ -259,7 +254,7 @@ func (rt *Runtime) catalogNow() (*Catalog, error) {
 	return rt.catalog()
 }
 
-func (rt *Runtime) reconcileAll(apply, probe bool) {
+func (rt *Runtime) reconcileAll(apply bool) {
 	cat, err := rt.catalogNow()
 	if err != nil {
 		logger.Warningf("clash: catalog unavailable: %v", err)
@@ -272,7 +267,7 @@ func (rt *Runtime) reconcileAll(apply, probe bool) {
 	}
 	rt.mu.RUnlock()
 	for _, pr := range policies {
-		rt.reconcilePolicy(pr, cat, apply, probe)
+		rt.reconcilePolicy(pr, cat, apply)
 	}
 }
 
@@ -304,8 +299,6 @@ func (rt *Runtime) loadPolicy(row AppliedPolicy) error {
 		budget:      row.BudgetBytes,
 		graceSecs:   row.GraceSeconds,
 		gracePct:    row.GracePercent,
-		activity:    row.ActivitySeconds,
-		siteGroups:  row.SiteGroups(),
 		timezone:    row.PeriodTimezone,
 		port:        row.GatewayPort,
 		managed:     row.ManagedInbounds(),
@@ -318,12 +311,10 @@ func (rt *Runtime) loadPolicy(row AppliedPolicy) error {
 		rt.enqueue(pr, change)
 	}}
 	policy, err := gateway.NewPolicy(pr.key, gateway.Config{
-		BudgetBytes:     row.BudgetBytes,
-		GraceSeconds:    row.GraceSeconds,
-		GracePercent:    row.GracePercent,
-		ActivitySeconds: row.ActivitySeconds,
-		SiteGroups:      row.SiteGroups(),
-		ResetSchedule:   row.ResetSchedule, AllocationRequired: row.AllocationRequired,
+		BudgetBytes:   row.BudgetBytes,
+		GraceSeconds:  row.GraceSeconds,
+		GracePercent:  row.GracePercent,
+		ResetSchedule: row.ResetSchedule, AllocationRequired: row.AllocationRequired,
 		PeriodTimezone: row.PeriodTimezone,
 	}, AppliedPolicyByGatewayState(row), store, cb, time.Now)
 	if err != nil {
@@ -383,16 +374,16 @@ func (rt *Runtime) startServer(pr *PolicyRuntime) error {
 	return nil
 }
 
-func (rt *Runtime) reconcilePolicy(pr *PolicyRuntime, cat *Catalog, apply, probe bool) {
+func (rt *Runtime) reconcilePolicy(pr *PolicyRuntime, cat *Catalog, apply bool) {
 	if pr == nil || pr.policy == nil {
 		return
 	}
 	unlock := rt.lockPolicy(pr.key)
 	defer unlock()
-	rt.reconcilePolicyLocked(pr, cat, apply, probe)
+	rt.reconcilePolicyLocked(pr, cat, apply)
 }
 
-func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply, probe bool) {
+func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply bool) {
 	if pr == nil || pr.policy == nil {
 		return
 	}
@@ -403,11 +394,9 @@ func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply,
 	}
 	clientEmail := pr.clientEmail
 	listening := pr.server != nil
-	previous := append([]ManagedInbound(nil), pr.managed...)
 	pr.mu.Unlock()
 
-	current := resolveManaged(cat, clientEmail, previous)
-	orphaned := orphanedManaged(previous, current)
+	current := resolveManaged(cat, clientEmail)
 
 	var applyErr []string
 	if !listening {
@@ -417,33 +406,7 @@ func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply,
 		applyErr = append(applyErr, err.Error())
 	}
 
-	changed := false
-	// Restore only legacy gateway-owned disables; quota enforcement never changes inbounds.
-	for i := range current {
-		if !current[i].DisabledByGateway {
-			continue
-		}
-		if err := rt.setInbound(current[i].Tag, true); err != nil {
-			applyErr = append(applyErr, fmt.Sprintf("%s: %v", current[i].Tag, err))
-			continue
-		}
-		current[i].Enabled = true
-		current[i].DisabledByGateway = false
-		changed = true
-	}
-	for i := range orphaned {
-		if !orphaned[i].DisabledByGateway {
-			continue
-		}
-		if err := rt.setInbound(orphaned[i].Tag, true); err != nil {
-			applyErr = append(applyErr, fmt.Sprintf("%s: %v", orphaned[i].Tag, err))
-			current = append(current, orphaned[i])
-			continue
-		}
-		changed = true
-	}
-
-	if changed || pr.managedChanged(current) {
+	if pr.managedChanged(current) {
 		pr.mu.Lock()
 		pr.managed = current
 		pr.needsApply = true
@@ -451,8 +414,8 @@ func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply,
 	}
 
 	pending := pr.takeNeedsApply()
-	needApply := apply && (changed || pending)
-	if !apply && (changed || pending) {
+	needApply := apply && pending
+	if !apply && pending {
 		pr.mu.Lock()
 		pr.needsApply = true
 		pr.mu.Unlock()
@@ -464,22 +427,6 @@ func (rt *Runtime) reconcilePolicyLocked(pr *PolicyRuntime, cat *Catalog, apply,
 			pr.needsApply = true
 			pr.mu.Unlock()
 		}
-	}
-
-	if probe {
-		for i := range current {
-			current[i].PortCheck, current[i].PortError = probeInbound(current[i], false)
-			expected := "open"
-			if !current[i].Enabled {
-				expected = "closed"
-			}
-			if current[i].PortCheck != expected {
-				applyErr = append(applyErr, fmt.Sprintf("%s: expected port %s, got %s (%s)", current[i].Tag, expected, current[i].PortCheck, current[i].PortError))
-			}
-		}
-		pr.mu.Lock()
-		pr.managed = current
-		pr.mu.Unlock()
 	}
 
 	if len(current) == 0 {
@@ -515,26 +462,14 @@ func (pr *PolicyRuntime) managedChanged(next []ManagedInbound) bool {
 	}
 	for i := range next {
 		if next[i].Tag != pr.managed[i].Tag || next[i].Port != pr.managed[i].Port ||
-			next[i].Enabled != pr.managed[i].Enabled ||
-			next[i].DisabledByGateway != pr.managed[i].DisabledByGateway {
+			next[i].Enabled != pr.managed[i].Enabled {
 			return true
 		}
 	}
 	return false
 }
 
-func (rt *Runtime) setInbound(tag string, enabled bool) error {
-	if rt.hooks.SetInboundEnabled == nil {
-		return errors.New("inbound control hook is not configured")
-	}
-	return rt.hooks.SetInboundEnabled(tag, enabled)
-}
-
-func resolveManaged(cat *Catalog, email string, previous []ManagedInbound) []ManagedInbound {
-	prev := make(map[string]ManagedInbound, len(previous))
-	for _, m := range previous {
-		prev[m.Tag] = m
-	}
+func resolveManaged(cat *Catalog, email string) []ManagedInbound {
 	out := make([]ManagedInbound, 0)
 	for _, in := range cat.Inbounds {
 		if in.NodeKey != LocalNodeKey {
@@ -543,8 +478,7 @@ func resolveManaged(cat *Catalog, email string, previous []ManagedInbound) []Man
 		if !containsString(in.Clients, email) {
 			continue
 		}
-		old, seen := prev[in.Tag]
-		if !in.Enabled && !(seen && old.DisabledByGateway) {
+		if !in.Enabled {
 			continue
 		}
 		m := ManagedInbound{
@@ -556,26 +490,6 @@ func resolveManaged(cat *Catalog, email string, previous []ManagedInbound) []Man
 			Network:  in.Network,
 			Security: in.Security,
 			Enabled:  in.Enabled,
-		}
-		if seen {
-			m.DisabledByGateway = old.DisabledByGateway
-			m.PortCheck = old.PortCheck
-			m.PortError = old.PortError
-		}
-		out = append(out, m)
-	}
-	return out
-}
-
-func orphanedManaged(previous, current []ManagedInbound) []ManagedInbound {
-	now := make(map[string]struct{}, len(current))
-	for _, m := range current {
-		now[m.Tag] = struct{}{}
-	}
-	out := make([]ManagedInbound, 0)
-	for _, m := range previous {
-		if _, ok := now[m.Tag]; ok {
-			continue
 		}
 		out = append(out, m)
 	}
@@ -589,30 +503,4 @@ func containsString(list []string, v string) bool {
 		}
 	}
 	return false
-}
-
-func probeInbound(m ManagedInbound, _ bool) (string, string) {
-	if m.Port <= 0 {
-		return "unknown", "invalid port"
-	}
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(probeHost(m.Listen, false), strconv.Itoa(m.Port)), time.Second)
-	if err == nil {
-		_ = conn.Close()
-		return "open", ""
-	}
-	if errors.Is(err, syscall.ECONNREFUSED) {
-		return "closed", ""
-	}
-	return "unknown", err.Error()
-}
-
-func probeHost(listen string, _ bool) string {
-	switch strings.TrimSpace(listen) {
-	case "", "0.0.0.0":
-		return "127.0.0.1"
-	case "::", "[::]":
-		return "::1"
-	default:
-		return strings.Trim(listen, "[]")
-	}
 }

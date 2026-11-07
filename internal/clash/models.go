@@ -3,6 +3,7 @@ package clash
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/gateway"
 )
 
@@ -114,8 +115,6 @@ type AppliedPolicy struct {
 	BudgetBytes          int64                 `gorm:"column:budget_bytes" json:"budgetBytes"`
 	GraceSeconds         int64                 `gorm:"column:grace_seconds" json:"graceSeconds"`
 	GracePercent         int64                 `gorm:"column:grace_percent" json:"gracePercent"`
-	ActivitySeconds      int64                 `gorm:"column:activity_seconds;default:0" json:"activitySeconds"`
-	SiteGroupsJSON       string                `gorm:"column:site_groups_json;type:text" json:"-"`
 	EffectiveRatio       float64               `gorm:"column:effective_ratio" json:"effectiveRatio"`
 	PeriodTimezone       string                `gorm:"column:period_timezone" json:"periodTimezone"`
 	GatewayPort          int                   `gorm:"column:gateway_port" json:"gatewayPort"`
@@ -129,8 +128,6 @@ type AppliedPolicy struct {
 	GraceDeadline        int64                 `gorm:"column:grace_deadline" json:"graceDeadline"`
 	GraceExtraBytes      int64                 `gorm:"column:grace_extra_bytes" json:"graceExtraBytes"`
 	GraceBaseline        int64                 `gorm:"column:grace_baseline" json:"graceBaseline"`
-	GraceGroupsJSON      string                `gorm:"column:grace_groups_json;type:text" json:"-"`
-	GraceSnapshotRaw     string                `gorm:"column:grace_snapshot_json;type:text" json:"-"`
 	DisabledAt           int64                 `gorm:"column:disabled_at" json:"disabledAt"`
 	ResetAppliedRevision int64                 `gorm:"column:reset_applied_revision;default:0" json:"-"`
 	Applied              bool                  `gorm:"column:applied;default:false" json:"applied"`
@@ -152,48 +149,13 @@ func (p AppliedPolicy) ManagedInbounds() []ManagedInbound {
 	return out
 }
 
-func (p AppliedPolicy) GraceSnapshot() []string {
-	if p.GraceSnapshotRaw == "" {
-		return nil
-	}
-	var out []string
-	_ = json.Unmarshal([]byte(p.GraceSnapshotRaw), &out)
-	return out
-}
-
-func (p AppliedPolicy) GraceGroups() []gateway.SiteGroup {
-	var groups []gateway.SiteGroup
-	_ = json.Unmarshal([]byte(p.GraceGroupsJSON), &groups)
-	return groups
-}
-
-func (p AppliedPolicy) SiteGroups() []gateway.SiteGroup {
-	if p.SiteGroupsJSON == "" {
-		return nil
-	}
-	var out []gateway.SiteGroup
-	_ = json.Unmarshal([]byte(p.SiteGroupsJSON), &out)
-	return out
-}
-
-func EncodeSiteGroups(groups []gateway.SiteGroup) string {
-	if len(groups) == 0 {
-		return ""
-	}
-	b, _ := json.Marshal(groups)
-	return string(b)
-}
-
 type ManagedInbound struct {
-	ID                int    `json:"id"`
-	Tag               string `json:"tag"`
-	Protocol          string `json:"protocol"`
-	Listen            string `json:"listen"`
-	Port              int    `json:"port"`
-	Network           string `json:"network"`
-	Security          string `json:"security"`
-	Enabled           bool   `json:"enabled"`
-	DisabledByGateway bool   `json:"disabledByGateway"`
-	PortCheck         string `json:"portCheck,omitempty"`
-	PortError         string `json:"portError,omitempty"`
+	ID       int    `json:"id"`
+	Tag      string `json:"tag"`
+	Protocol string `json:"protocol"`
+	Listen   string `json:"listen"`
+	Port     int    `json:"port"`
+	Network  string `json:"network"`
+	Security string `json:"security"`
+	Enabled  bool   `json:"enabled"`
 }

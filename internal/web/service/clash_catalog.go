@@ -9,7 +9,7 @@ import (
 
 // NewClashCatalogProvider builds the project's read-only view of official
 // nodes, inbounds and clients. Official rows are read through their services;
-// the project never writes them except through the narrow inbound-enable hook.
+// quota enforcement never modifies the upstream inbound enabled state.
 func NewClashCatalogProvider() clash.CatalogProvider {
 	return func() (*clash.Catalog, error) {
 		settingSvc := &SettingService{}

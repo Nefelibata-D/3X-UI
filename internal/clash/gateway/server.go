@@ -127,7 +127,7 @@ func (s *Server) handle(c net.Conn) {
 		_ = writeReply(c, 8)
 		return
 	}
-	id, tracked := s.policy.Track(host, abort)
+	id, tracked := s.policy.Track(abort)
 	if !tracked {
 		_ = writeReply(c, 2)
 		return
@@ -158,11 +158,11 @@ func (s *Server) handle(c net.Conn) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		copyDirection(target, br, func(n int64) { s.policy.AccountConn(id, n, 0) })
+		copyDirection(target, br, func(n int64) { s.policy.Account(n, 0) })
 	}()
 	go func() {
 		defer wg.Done()
-		copyDirection(c, target, func(n int64) { s.policy.AccountConn(id, 0, n) })
+		copyDirection(c, target, func(n int64) { s.policy.Account(0, n) })
 	}()
 	wg.Wait()
 }

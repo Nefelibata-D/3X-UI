@@ -18,9 +18,6 @@ export const ManagedInboundSchema = z.object({
   network: z.string().optional().default(''),
   security: z.string().optional().default(''),
   enabled: z.boolean(),
-  disabledByGateway: z.boolean().optional().default(false),
-  portCheck: z.string().optional(),
-  portError: z.string().optional(),
 });
 
 export const PolicyOverviewSchema = z.object({
@@ -46,10 +43,6 @@ export const PolicyOverviewSchema = z.object({
   graceStartedAt: z.number().optional().default(0),
   graceDeadline: z.number().optional().default(0),
   graceExtraBytes: z.number().optional().default(0),
-  graceSnapshot: z
-    .array(z.string())
-    .nullish()
-    .transform((v) => v ?? []),
   gatewayPort: z.number().optional().default(0),
   gatewayListening: z.boolean().optional().default(false),
   activeConnections: z.number().optional().default(0),

@@ -21,7 +21,6 @@ const (
 const MaxGraceSeconds = int64(600)
 
 // Config is the enforced budget. Grace settings are frozen when grace starts.
-// Legacy site/activity fields remain wire-compatible; grace admission is unrestricted.
 type Config struct {
 	ResetSchedule      ResetSchedule
 	AllocationRequired bool
@@ -29,8 +28,6 @@ type Config struct {
 	GraceSeconds       int64
 	GracePercent       int64
 	PeriodTimezone     string
-	ActivitySeconds    int64
-	SiteGroups         []SiteGroup
 }
 
 // PersistedState is the complete ledger for one policy. Usage counters are
@@ -39,7 +36,6 @@ type PersistedState struct {
 	ResetSchedule   ResetSchedule `json:"resetSchedule"`
 	PeriodTimezone  string        `json:"periodTimezone"`
 	ResetRevision   int64         `json:"resetRevision"`
-	GraceGroups     []SiteGroup   `json:"graceGroups,omitempty"`
 	State           State         `json:"state"`
 	UsageUp         int64         `json:"usageUp"`
 	UsageDown       int64         `json:"usageDown"`
@@ -49,7 +45,6 @@ type PersistedState struct {
 	GraceDeadline   int64         `json:"graceDeadline"`
 	GraceExtraBytes int64         `json:"graceExtraBytes"`
 	GraceBaseline   int64         `json:"graceBaseline"`
-	GraceSnapshot   []string      `json:"graceSnapshot"`
 	DisabledAt      int64         `json:"disabledAt"`
 }
 
@@ -78,7 +73,6 @@ type Report struct {
 	GraceStartedAt    int64
 	GraceDeadline     int64
 	GraceBaseline     int64
-	GraceSnapshot     []string
 	ActiveConnections int
 	DisabledAt        int64
 	LastError         string
@@ -185,16 +179,10 @@ func validateConfig(cfg Config) error {
 	if cfg.GracePercent < 0 || cfg.GracePercent > 100 {
 		return fmt.Errorf("gateway: grace percent must be 0..100, got %d", cfg.GracePercent)
 	}
-	if cfg.ActivitySeconds < 0 {
-		return fmt.Errorf("gateway: activity seconds must not be negative, got %d", cfg.ActivitySeconds)
-	}
-	if cfg.ActivitySeconds > int64((1<<63-1)/int64(time.Second)) {
-		return errors.New("gateway: activity seconds overflows time.Duration")
-	}
 	return nil
 }
 
-// ValidateConfig validates the complete enforced policy, including site groups.
+// ValidateConfig validates the enforced quota and billing schedule.
 func ValidateConfig(cfg Config) error {
 	if err := validateConfig(cfg); err != nil {
 		return err
@@ -202,7 +190,7 @@ func ValidateConfig(cfg Config) error {
 	if _, err := loadLocation(cfg.PeriodTimezone); err != nil {
 		return err
 	}
-	return validateSiteGroups(cfg.SiteGroups)
+	return nil
 }
 
 func loadLocation(name string) (*time.Location, error) {
@@ -216,17 +204,11 @@ func loadLocation(name string) (*time.Location, error) {
 	return loc, nil
 }
 
-func monthBounds(now time.Time, loc *time.Location) (int64, int64) {
-	t := now.In(loc)
-	start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, loc)
-	return start.Unix(), start.AddDate(0, 1, 0).Unix()
-}
-
 func (p *Policy) usageTotalLocked() int64 {
 	return p.usageUp + p.usageDown
 }
 
-func (p *Policy) admitLocked(_ string, at time.Time) (bool, *StateChange, []func()) {
+func (p *Policy) admitLocked(at time.Time) (bool, *StateChange, []func()) {
 	change, aborts := p.settleLocked(at, false)
 	if p.lastError != "" {
 		if err := p.persistLocked(); err != nil {
@@ -242,16 +224,16 @@ func (p *Policy) admitLocked(_ string, at time.Time) (bool, *StateChange, []func
 	}
 }
 
-func (p *Policy) Admit(host string) bool {
+func (p *Policy) Admit() bool {
 	at := p.now()
 	p.mu.Lock()
-	allowed, change, aborts := p.admitLocked(host, at)
+	allowed, change, aborts := p.admitLocked(at)
 	p.mu.Unlock()
 	p.afterUnlock(change, aborts)
 	return allowed
 }
 
-func (p *Policy) Track(host string, abort func()) (int64, bool) {
+func (p *Policy) Track(abort func()) (int64, bool) {
 	if abort == nil {
 		abort = func() {}
 	}
@@ -261,7 +243,7 @@ func (p *Policy) Track(host string, abort func()) (int64, bool) {
 		p.mu.Unlock()
 		return 0, false
 	}
-	allowed, change, aborts := p.admitLocked(host, at)
+	allowed, change, aborts := p.admitLocked(at)
 	if !allowed {
 		p.mu.Unlock()
 		p.afterUnlock(change, aborts)
@@ -281,16 +263,8 @@ func (p *Policy) Untrack(id int64) {
 	p.mu.Unlock()
 }
 
-// Account and AccountConn share the per-user ledger across all connections.
+// Account updates the per-user ledger shared by all connections.
 func (p *Policy) Account(up, down int64) {
-	p.account(0, up, down)
-}
-
-func (p *Policy) AccountConn(id, up, down int64) {
-	p.account(id, up, down)
-}
-
-func (p *Policy) account(_ int64, up, down int64) {
 	at := p.now()
 	p.mu.Lock()
 	if p.closed {
@@ -388,9 +362,8 @@ func (p *Policy) ApplyConfig(cfg Config) error {
 	return nil
 }
 
-// Reset persists the zero ledger before changing in-memory state. A failed
-// save leaves usage, state and the grace snapshot untouched so a restart
-// cannot disagree with a reset that was reported as successful.
+// Reset persists the zero ledger before changing memory, so a failed save
+// cannot report success or leave restart behavior inconsistent.
 func (p *Policy) Reset() error { return p.ResetRevision(0) }
 
 func (p *Policy) ResetRevision(revision int64) error {

@@ -3,14 +3,14 @@ package service
 import (
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/clash"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
-
-	"gorm.io/gorm"
 )
 
 func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email string) (bool, error) {
@@ -113,6 +113,10 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 	}
 	inboundSvc.resetMtprotoClientQuotas(cleanEmails)
 	inboundSvc.deliverNodeResetsNow(resetNodes)
+	// Project: keep node ledgers in sync with the upstream bulk reset.
+	if err := requestClashTrafficResets(cleanEmails); err != nil {
+		return affected, err
+	}
 	// After the zeroing, as in ResetTrafficByEmail: enabling a still-depleted
 	// client first lets the next traffic tick switch it off again.
 	for _, e := range cleanEmails {
@@ -142,6 +146,10 @@ func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id in
 	}
 	inboundSvc.resetMtprotoClientQuotas(resetEmails)
 	inboundSvc.deliverNodeResetsNow(resetNodes)
+	// Project: reset the same clients' node ledgers before re-enabling them.
+	if err := requestClashTrafficResets(resetEmails); err != nil {
+		return false, err
+	}
 	needRestart := false
 	if len(restore) > 0 {
 		var enableErr error
@@ -262,6 +270,10 @@ func (s *ClientService) ResetAllTraffics() (bool, error) {
 	inbounds := &InboundService{}
 	inbounds.resetAllMtprotoQuotas()
 	inbounds.deliverNodeResetsNow(resetNodes)
+	// Project: the explicit reset-all operation includes every node ledger.
+	if err := requestAllClashTrafficResets(); err != nil {
+		return false, err
+	}
 	needRestart := false
 	if len(restore) > 0 {
 		var enableErr error

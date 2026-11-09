@@ -1,3 +1,4 @@
+import { parseBlacklistRule } from '@/lib/clash/subscription/blacklist';
 import { isMap, isSeq, parseDocument } from 'yaml';
 import { proxyTypes } from '@/lib/clash/subscription/template/schema';
 import { builtins } from '@/lib/clash/subscription/template/symbols';
@@ -149,26 +150,44 @@ export function loadBalanceErrors(
         doc.getIn(['proxy-groups', g.index], true),
       );
   const entries = doc.get('site-blacklist');
+  const scopes = new Set<string>();
   if (isSeq(entries))
     for (const entry of entries.items) {
       if (!isMap(entry)) continue;
       const scope = entry.get('group');
+      if (typeof scope !== 'string' || !scope.trim() || scopes.has(scope))
+        add('黑名单 group 必须非空且不能重复。', entry);
+      scopes.add(String(scope));
+      if (entry.has('proxy'))
+        add('旧黑名单 proxy 格式已移除，请使用 类型,内容,[节点列表]。', entry);
       const group = groups.find((g) => g.name === scope);
       if (
         scope &&
         (!group || group.type !== 'load-balance' || group.strategy !== 'weighted-sticky')
       )
         add(`黑名单所属组 ${scope} 必须开启 weighted-sticky 负载均衡。`, entry.get('group', true));
-      const proxy = String(entry.get('proxy'));
-      if (
-        stage === 'subscription' &&
-        (!actual.includes(proxy) || (group && !group.effective.includes(proxy)))
-      )
-        add(`黑名单节点 ${proxy} 必须是所属组中的有效代理。`, entry.get('proxy', true));
       const rules = entry.get('rules');
-      if (!isSeq(rules)) continue;
+      if (!isSeq(rules) || !rules.items.length) {
+        add('黑名单 rules 必须是非空列表。', entry);
+        continue;
+      }
       for (const rule of rules.items) {
-        const line = String(rule);
+        let parsed;
+        try {
+          parsed = parseBlacklistRule(String(rule));
+        } catch (error) {
+          add(String(error), rule);
+          continue;
+        }
+        if (stage === 'subscription' && !parsed.proxies.length)
+          add('发布前请配置黑名单节点。', rule);
+        for (const proxy of parsed.proxies)
+          if (
+            stage === 'subscription' &&
+            (!actual.includes(proxy) || !group?.effective.includes(proxy))
+          )
+            add(`黑名单节点 ${proxy} 必须是所属组中的有效代理。`, rule);
+        const line = parsed.rule;
         const comma = line.indexOf(',');
         const kind = line.slice(0, comma);
         const payload = line.slice(comma + 1);

@@ -322,14 +322,17 @@ export default function NodeGroups({
               editor
             ) : (
               <SortableTemplateRow showHandle={!readonly} enabled={!readonly && !draft && !invalid}>
-                <span className="template-entry-title" title={group.name}>
-                  {group.name}
-                </span>
-                {group.type === 'load-balance' && <Tag color="purple">负载均衡</Tag>}
-                <Tag color="blue">{group.type.toUpperCase()}</Tag>
-                {effectiveDependencies.find((n) => n.name === group.name)?.pending && (
-                  <Tag color="orange">待客户端注入</Tag>
-                )}
+                <div className="node-group-summary">
+                  <div className="node-group-heading">
+                    <span className="template-entry-title" title={group.name}>
+                      {group.name}
+                    </span>
+                    <Tag color="blue">{group.type.toUpperCase()}</Tag>
+                  </div>
+                  {effectiveDependencies.find((n) => n.name === group.name)?.pending && (
+                    <Tag color="orange">待客户端注入</Tag>
+                  )}
+                </div>
                 {!readonly && (
                   <Space size={4}>
                     <Button

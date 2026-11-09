@@ -52,7 +52,10 @@ balanceProperties['weighted-sticky'] = {
         },
         anyOf: [
           { required: ['domains'], properties: { domains: { ...strings, minItems: 1 } } },
-          { required: ['domain-suffixes'], properties: { 'domain-suffixes': { ...strings, minItems: 1 } } },
+          {
+            required: ['domain-suffixes'],
+            properties: { 'domain-suffixes': { ...strings, minItems: 1 } },
+          },
         ],
       },
     },
@@ -84,12 +87,11 @@ templateSchema.allOf!.push({
       title: '新绑定时避开的节点',
       items: {
         type: 'object',
-        required: ['proxy', 'rules'],
+        required: ['group', 'rules'],
         additionalProperties: false,
         properties: {
           group: { type: 'string', minLength: 1 },
-          proxy: { type: 'string' },
-          rules: strings,
+          rules: { ...strings, minItems: 1 },
         },
       },
     },

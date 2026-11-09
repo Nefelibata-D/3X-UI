@@ -1,3 +1,4 @@
+import { parseBlacklistRule, blacklistProxyToken } from '@/lib/clash/subscription/blacklist';
 import { isMap, isSeq, isScalar, type Document, type Scalar } from 'yaml';
 
 export type SymbolKind = 'proxy' | 'provider' | 'ruleset' | 'subrule' | 'groupType' | 'proxyType';
@@ -10,6 +11,7 @@ export interface Slot {
   end: number;
   declaration: boolean;
   name: string;
+  blacklistTarget?: boolean;
 }
 
 export function templateSymbols(doc: Document) {
@@ -126,9 +128,25 @@ export function templateSymbols(doc: Document) {
   });
   sequence(doc.get('site-blacklist'), (b) => {
     if (isMap(b)) {
-      add(b.get('proxy', true), 'proxy');
       add(b.get('group', true), 'proxy');
-      sequence(b.get('rules'), (r) => rule(r, false));
+      sequence(b.get('rules'), (r) => {
+        rule(r, false);
+        if (!isScalar(r) || typeof r.value !== 'string') return;
+        try {
+          for (const slot of parseBlacklistRule(r.value).slots)
+            slots.push({
+              node: r,
+              kind: 'proxy',
+              declaration: false,
+              name: slot.name,
+              start: slot.start,
+              end: slot.end,
+              blacklistTarget: true,
+            });
+        } catch {
+          return;
+        }
+      });
     }
   });
   for (const key of ['nameserver-policy', 'proxy-server-nameserver-policy']) {
@@ -153,6 +171,9 @@ export function replaceSymbol(slots: Slot[], kind: SymbolKind, oldName: string, 
     .filter((s) => s.kind === kind && s.name === oldName)
     .sort((a, b) => b.start - a.start)) {
     const value = String(slot.node.value);
-    slot.node.value = value.slice(0, slot.start) + newName + value.slice(slot.end);
+    slot.node.value =
+      value.slice(0, slot.start) +
+      (slot.blacklistTarget ? blacklistProxyToken(newName) : newName) +
+      value.slice(slot.end);
   }
 }

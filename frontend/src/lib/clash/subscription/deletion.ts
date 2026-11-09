@@ -46,7 +46,7 @@ export function deleteSubscriptionGroup(base: string, binding: Subscription, nam
   if (isSeq(blacklists)) {
     for (let i = blacklists.items.length - 1; i >= 0; i--) {
       const entry = blacklists.items[i];
-      if (isMap(entry) && (entry.get('group') === name || entry.get('proxy') === name)) {
+      if (isMap(entry) && entry.get('group') === name) {
         references.push('黑名单：' + stringify(entry.toJSON()).trim());
         blacklists.delete(i);
       }

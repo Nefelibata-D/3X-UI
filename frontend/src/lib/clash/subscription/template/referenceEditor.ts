@@ -1,3 +1,4 @@
+import { blacklistProxyToken } from '@/lib/clash/subscription/blacklist';
 import * as monaco from 'monaco-editor';
 import { proxyTypes } from '@/lib/clash/subscription/template/schema';
 import { isMap, isSeq, isScalar, parseDocument, stringify } from 'yaml';
@@ -59,7 +60,7 @@ export function installTemplateReferences(
         options: { inlineClassName: `yaml-rule-${kind}` },
       });
     };
-    const colorRules = (list: unknown, hasTarget: boolean) => {
+    const colorRules = (list: unknown, hasTarget: boolean, blacklist = false) => {
       if (!isSeq(list)) return;
       for (const node of list.items) {
         if (!isScalar(node) || typeof node.value !== 'string' || !node.range) continue;
@@ -78,6 +79,25 @@ export function installTemplateReferences(
             )
           : undefined;
         const targetStart = target ? model.getOffsetAt(target[1].getStartPosition()) : end;
+        if (blacklist) {
+          const targets = [...ranges].filter(
+            ([slot]) => slot.node === node && slot.blacklistTarget,
+          );
+          paint(start, start + comma, 'type');
+          const first = targets[0];
+          paint(
+            start + comma + 1,
+            first ? model.getOffsetAt(first[1].getStartPosition()) - 1 : end,
+            'match',
+          );
+          for (const [, range] of targets)
+            paint(
+              model.getOffsetAt(range.getStartPosition()),
+              model.getOffsetAt(range.getEndPosition()),
+              'policy',
+            );
+          continue;
+        }
         paint(start, start + comma, 'type');
         paint(start + comma + 1, target ? targetStart - 1 : end, 'match');
         if (target) paint(targetStart, model.getOffsetAt(target[1].getEndPosition()), 'policy');
@@ -88,7 +108,8 @@ export function installTemplateReferences(
     if (isMap(subrules)) for (const pair of subrules.items) colorRules(pair.value, true);
     const blacklist = doc.get('site-blacklist');
     if (isSeq(blacklist))
-      for (const entry of blacklist.items) if (isMap(entry)) colorRules(entry.get('rules'), false);
+      for (const entry of blacklist.items)
+        if (isMap(entry)) colorRules(entry.get('rules'), false, true);
     const providers = doc.get('rule-providers');
     if (isMap(providers))
       for (const pair of providers.items)
@@ -129,9 +150,9 @@ export function installTemplateReferences(
       if (s.kind === 'proxy') builtins.forEach((v) => values.add(v));
       return {
         suggestions: [...values].map((value) => {
-          let insertText = value;
-          if (s.node.type === 'QUOTE_DOUBLE') insertText = JSON.stringify(value).slice(1, -1);
-          else if (s.node.type === 'QUOTE_SINGLE') insertText = value.replaceAll("'", "''");
+          let insertText = s.blacklistTarget ? blacklistProxyToken(value) : value;
+          if (s.node.type === 'QUOTE_DOUBLE') insertText = JSON.stringify(insertText).slice(1, -1);
+          else if (s.node.type === 'QUOTE_SINGLE') insertText = insertText.replaceAll("'", "''");
           else if (s.start === 0 && s.end === String(s.node.value ?? '').length)
             insertText = stringify(value, {
               lineWidth: 0,

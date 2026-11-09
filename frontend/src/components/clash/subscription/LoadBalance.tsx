@@ -1,3 +1,4 @@
+import { parseBlacklistRule, formatBlacklistRule } from '@/lib/clash/subscription/blacklist';
 import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, message, Button, Input, Select, Space, Tag, Tooltip } from 'antd';
@@ -178,9 +179,13 @@ function BalanceContent({
         const rules = entry.get('rules');
         if (isSeq(rules))
           for (const rule of rules.items) {
-            const key = String(rule);
-            if (!rows.has(key)) rows.set(key, new Set());
-            rows.get(key)!.add(String(entry.get('proxy')));
+            try {
+              const parsed = parseBlacklistRule(String(rule));
+              if (!rows.has(parsed.rule)) rows.set(parsed.rule, new Set());
+              for (const proxy of parsed.proxies) rows.get(parsed.rule)!.add(proxy);
+            } catch {
+              continue;
+            }
           }
       }
     return [...rows].map(([rule, proxies]) => ({ rule, proxies: [...proxies] }));
@@ -193,7 +198,7 @@ function BalanceContent({
       const rules = entry.get('rules');
       if (!isSeq(rules)) continue;
       for (let j = rules.items.length - 1; j >= 0; j--)
-        if (String(rules.items[j]) === rule) rules.delete(j);
+        if (parseBlacklistRule(String(rules.items[j])).rule === rule) rules.delete(j);
       if (!rules.items.length) entries.delete(i);
     }
     if (save) commit();
@@ -230,7 +235,7 @@ function BalanceContent({
   function addRule() {
     if (!group || !draft) return;
     const value = draft.value.trim();
-    if (!value || (draft.kind !== 'DOMAIN-REGEX' && value.includes(',')) || /[\r\n]/.test(value)) {
+    if (!value || (!draft.kind.endsWith('-REGEX') && value.includes(',')) || /[\r\n]/.test(value)) {
       void message.error('请选择节点并填写有效的规则内容');
       return;
     }
@@ -267,9 +272,10 @@ function BalanceContent({
       return;
     }
     if (draft.original) deleteRule(group.name, draft.original, false);
-    for (const proxy of draft.proxies.length ? draft.proxies : ['']) {
-      list.add(doc.createNode({ group: group.name, proxy, rules: [`${draft.kind},${value}`] }));
-    }
+    const line = formatBlacklistRule(`${draft.kind},${value}`, draft.proxies);
+    const entry = list.items.find((item) => isMap(item) && item.get('group') === group.name);
+    if (isMap(entry)) entry.addIn(['rules'], line);
+    else list.add(doc.createNode({ group: group.name, rules: [line] }));
     const problems = loadBalanceErrors(doc.toString());
     if (problems.length) {
       void message.error(problems[0]);

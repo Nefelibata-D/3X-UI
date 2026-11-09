@@ -95,6 +95,9 @@ func SaveTemplate(t *YAMLTemplate) error {
 	if err := yaml.Unmarshal([]byte(t.Content), &config); err != nil {
 		return err
 	}
+	if _, err := validateSiteBlacklist(config); err != nil {
+		return err
+	}
 	groups, err := subscriptionGroups(config)
 	if err != nil {
 		return err

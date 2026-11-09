@@ -161,14 +161,10 @@ export function validateTemplate(
   }
   const slots = templateSymbols(doc);
   const providers = doc.get('proxy-providers');
-  const blacklists = doc.get('site-blacklist');
-  const exampleNodes = new Set(
-    isSeq(blacklists) ? blacklists.items.filter(isMap).map((b) => b.get('proxy', true)) : [],
-  );
   for (const s of slots.filter(
     (s) => !s.declaration && s.kind !== 'groupType' && s.kind !== 'proxyType',
   )) {
-    if (stage === 'template' && exampleNodes.has(s.node)) continue;
+    if (stage === 'template' && s.blacklistTarget) continue;
     if (s.kind === 'proxy' && (builtins.includes(s.name) || knownProxies.includes(s.name)))
       continue;
     if (!slots.some((d) => d.declaration && d.kind === s.kind && d.name === s.name)) {

@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"fmt"
-	"strings"
 )
 
 func ValidatePublishedSubscription(config map[string]any, proxies []map[string]any, dialers map[string]string) error {
@@ -88,36 +87,18 @@ func ValidatePublishedSubscription(config map[string]any, proxies []map[string]a
 			return err
 		}
 	}
-	list, _ := config["site-blacklist"].([]any)
-	for _, raw := range list {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			return fmt.Errorf("黑名单配置必须是对象")
+	blacklists, err := validateSiteBlacklist(config)
+	if err != nil {
+		return err
+	}
+	for _, entry := range blacklists {
+		if len(entry.proxies) == 0 {
+			return fmt.Errorf("发布前请配置黑名单节点：%s", entry.group)
 		}
-		proxy, _ := entry["proxy"].(string)
-		if strings.TrimSpace(proxy) == "" || actual[proxy] == nil {
-			return fmt.Errorf("发布前请配置有效的黑名单节点：%s", proxy)
-		}
-		scope, _ := entry["group"].(string)
-		targets := []string{}
-		if scope != "" {
-			targets = append(targets, scope)
-		} else {
-			for name, g := range groups {
-				if g["strategy"] == "weighted-sticky" {
-					targets = append(targets, name)
-				}
+		for _, proxy := range entry.proxies {
+			if actual[proxy] == nil || !candidates[entry.group][proxy] {
+				return fmt.Errorf("黑名单节点 %s 不在节点组 %s 的有效成员中", proxy, entry.group)
 			}
-		}
-		for _, name := range targets {
-			g := groups[name]
-			if g == nil || g["type"] != "load-balance" || g["strategy"] != "weighted-sticky" {
-				return fmt.Errorf("黑名单所属负载均衡节点组不存在：%s", name)
-			}
-			if !candidates[name][proxy] {
-				return fmt.Errorf("黑名单节点 %s 不在节点组 %s 的有效成员中", proxy, name)
-			}
-
 		}
 	}
 	return nil

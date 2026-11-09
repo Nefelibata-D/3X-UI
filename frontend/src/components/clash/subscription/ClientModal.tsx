@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import {
-  useClashSubscription,
-  useSaveClashSubscription,
-} from '@/api/queries/clash/subscription';
-import { validateSubscription } from '@/lib/clash/subscription/api';
-import type { Template, RuleSet, SubscriptionProxy } from '@/schemas/clash/subscription';
+import { useClashSubscription, useSaveClashSubscription } from '@/api/queries/clash/subscription';
+import { injectPublication, restorePublicationFields } from '@/lib/clash/subscription/publication';
+import type {
+  Template,
+  RuleSet,
+  SubscriptionProxy,
+  PublicationContext,
+} from '@/schemas/clash/subscription';
 import {
   Alert,
   message,
@@ -28,7 +30,6 @@ import TemplateInsert from '@/components/clash/subscription/TemplateInsert';
 import NodeGroups from '@/components/clash/subscription/NodeGroups';
 import TemplateWorkspace from '@/components/clash/subscription/TemplateWorkspace';
 import LoadBalance from '@/components/clash/subscription/LoadBalance';
-import ClashYamlEditor from '@/components/clash/subscription/ClashYamlEditor';
 import { weightedGroupIssue } from '@/lib/clash/subscription/loadBalance';
 import { deleteSubscriptionGroup } from '@/lib/clash/subscription/deletion';
 import { validateTemplate } from '@/lib/clash/subscription/template/validation';
@@ -74,18 +75,20 @@ function SubscriptionEditor({
   client,
   subscriptionURL,
   onClose,
-  data,
+  data: initialData,
 }: Props & {
   data: {
     proxies: SubscriptionProxy[];
+    publication: PublicationContext;
     binding: Subscription;
     templates: Template[];
     inbounds: { inboundKey: string; name: string; hostOverride: boolean }[];
     rules: RuleSet[];
   };
 }) {
-  const form = useForm<Subscription>({ defaultValues: data.binding });
+  const [data] = useState(initialData);
   const [modal, modalContextHolder] = Modal.useModal();
+  const form = useForm<Subscription>({ defaultValues: data.binding });
   const draft = useWatch({ control: form.control }) as Subscription;
   const [saving, setSaving] = useState(false);
   const [chainValid, setChainValid] = useState(true);
@@ -158,7 +161,7 @@ function SubscriptionEditor({
     }
     return proxy;
   });
-  const previewContent = stringify({
+  const memberContent = stringify({
     ...combined,
     proxies: previewProxies,
     'proxy-groups': entries(combined, 'proxy-groups').map(([name, value]) => ({
@@ -166,14 +169,22 @@ function SubscriptionEditor({
       proxies: injectedMembers[name],
     })),
   });
-  const chainContent = stringify({
-    ...combined,
-    proxies: previewProxies,
-    'proxy-groups': entries(combined, 'proxy-groups').map(([name, value]) => ({
-      ...(value as Record<string, unknown>),
-      proxies: injectedMembers[name],
-    })),
-  });
+  const chainContent = memberContent;
+  let previewContent = memberContent,
+    publicationError = '';
+  try {
+    const published = injectPublication(
+      documentObject(memberContent),
+      data.publication,
+      Object.fromEntries(data.proxies.map((proxy) => [proxy.name, proxy.nodeKey])),
+    );
+    const content = stringify(published);
+    const report = validateTemplate(content, 'subscription');
+    if (report.errors.length) throw Error(report.errors.join('\n'));
+    previewContent = content;
+  } catch (e) {
+    publicationError = String(e);
+  }
   const customGroups = entries(overlay, 'proxy-groups').map(([name, value]) => ({
     name,
     type: String((value as Record<string, unknown>).type),
@@ -398,6 +409,7 @@ function SubscriptionEditor({
       ) : (
         <NodeGroups
           {...common}
+          effectiveContent={memberContent}
           groups={rows.map(([name, value]) => ({
             name,
             type: String((value as Record<string, unknown>).type),
@@ -437,39 +449,15 @@ function SubscriptionEditor({
       </>
     );
   }
-  async function check() {
-    if (!draft.templateId) {
-      void message.success('使用官方默认订阅');
-      return;
-    }
-    try {
-      if (!chainValid) throw Error('请先修复链式代理配置');
-      const published = await validateSubscription(client.id, draft);
-      setError('');
-      modal.info({
-        title: '校验通过 · 实际订阅预览',
-        width: 960,
-        content: <ClashYamlEditor value={published} readOnly minHeight="360px" />,
-      });
-    } catch (e) {
-      setError(String(e));
-    }
-  }
   async function save() {
     setSaving(true);
     setError('');
     try {
-      if (yamlError) throw new Error(yamlError);
+      if (yamlError || publicationError) throw new Error(yamlError || publicationError);
       if (!chainValid) throw new Error('请先修复链式代理配置');
       if (draft.templateId) {
         if (!template) throw new Error('请选择有效模板');
         if (compositionError) throw new Error(compositionError);
-        const report = validateTemplate(composed);
-        if (report.errors.length) throw new Error(report.errors.join('\n'));
-        const missing = report.pending.filter(
-          (name) => !draft.groups.some((g) => g.group === name && (g.allNodes || g.nodes.length)),
-        );
-        if (missing.length) throw new Error('请为代理组配置注入：' + missing.join('、'));
       }
       await saveMutation.mutateAsync(draft);
       void message.success('订阅配置已保存');
@@ -561,6 +549,10 @@ function SubscriptionEditor({
               const original = entries(combined, 'proxy-groups').find(
                 ([id]) => id === name,
               )?.[1] as Record<string, unknown> | undefined;
+              const published = entries(documentObject(previewContent), 'proxy-groups').find(
+                ([id]) => id === name,
+              )?.[1] as Record<string, unknown> | undefined;
+              restorePublicationFields(group, original ?? {}, published ?? {});
               const explicit = Array.isArray(original?.proxies) ? original.proxies : [];
               const generated = (injectedMembers[name] ?? []).filter(
                 (member) => !explicit.includes(member),
@@ -585,7 +577,7 @@ function SubscriptionEditor({
           }
         }}
         readonly={!template}
-        error={yamlError || compositionError}
+        error={yamlError || compositionError || publicationError}
         groupCount={groupRows.length}
       >
         <Tabs
@@ -605,6 +597,7 @@ function SubscriptionEditor({
                     <NodeGroups
                       content={draft.content}
                       referenceContent={composed}
+                      effectiveContent={memberContent}
                       entryClassName={() => 'subscription-node-card'}
                       onRemove={removeGroup}
                       groups={customGroups}
@@ -718,20 +711,19 @@ function SubscriptionEditor({
           </div>
         )}
       </TemplateWorkspace>
-      {(error || yamlError || compositionError) && (
+      {(error || yamlError || compositionError || publicationError) && (
         <Alert
           style={{ marginTop: 12 }}
           type="error"
-          title={error || yamlError || compositionError}
+          title={error || yamlError || compositionError || publicationError}
         />
       )}
       <div className="subscription-footer">
         <Space>
           <Button onClick={onClose}>取消</Button>
-          <Button onClick={() => void check()}>校验配置</Button>
           <Button
             type="primary"
-            disabled={!chainValid}
+            disabled={!chainValid || !!publicationError || !!yamlError || !!compositionError}
             loading={saving}
             onClick={() => void save()}
           >

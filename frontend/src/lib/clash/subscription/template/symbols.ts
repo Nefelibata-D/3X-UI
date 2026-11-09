@@ -102,10 +102,9 @@ export function templateSymbols(doc: Document) {
       add(g.get('type', true), 'groupType');
       sequence(g.get('proxies'), (p) => add(p, 'proxy'));
       sequence(g.get('use'), (p) => add(p, 'provider'));
-      map(g.getIn(['weighted-sticky', 'weights']), (key) => add(key, 'proxy'));
-      map(g.getIn(['weighted-sticky', 'resilience', 'control', 'node-ids']), (key) =>
-        add(key, 'proxy'),
-      );
+      sequence(g.getIn(['weighted-sticky', 'nodes']), (node) => {
+        if (isMap(node)) sequence(node.get('proxies'), (proxy) => add(proxy, 'proxy'));
+      });
     }
   });
   map(doc.get('proxy-providers'), (key, p) => {

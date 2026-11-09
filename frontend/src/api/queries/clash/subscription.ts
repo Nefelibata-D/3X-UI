@@ -33,11 +33,12 @@ export function useClashSubscription(id: number | undefined) {
     data:
       binding.data && proxies.data && templates.data && rules.data
         ? {
-            binding: expandLegacyNodeBindings(binding.data, proxies.data),
-            proxies: proxies.data,
+            binding: expandLegacyNodeBindings(binding.data, proxies.data.proxies),
+            proxies: proxies.data.proxies,
+            publication: proxies.data.publication,
             templates: templates.data,
             rules: rules.data,
-            inbounds: subscriptionInboundOptions(proxies.data),
+            inbounds: subscriptionInboundOptions(proxies.data.proxies),
           }
         : undefined,
   };

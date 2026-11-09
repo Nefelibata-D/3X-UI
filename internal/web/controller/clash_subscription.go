@@ -60,7 +60,7 @@ func projectSubscription(c *gin.Context, id int, binding *subscription.Subscript
 		host = name
 	}
 	renderer := sub.NewSubClashService(false, "", false, sub.NewSubService(remark))
-	return renderer.ProjectSubscription(client.SubID, host, binding)
+	return renderer.ProjectSubscription(client.SubID, host, binding, c.Query("context") == "1")
 }
 func (a *ClashController) subscriptionProxies(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -69,7 +69,7 @@ func (a *ClashController) subscriptionProxies(c *gin.Context) {
 		return
 	}
 	text, err := projectSubscription(c, id, nil)
-	var proxies []map[string]any
+	var proxies any
 	if err == nil {
 		err = yaml.Unmarshal([]byte(text), &proxies)
 	}

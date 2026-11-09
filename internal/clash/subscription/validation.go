@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -48,32 +47,21 @@ func ValidatePublishedSubscription(config map[string]any, proxies []map[string]a
 	for name, g := range groups {
 		members, _ := g["proxies"].([]any)
 		set := map[string]bool{}
-		opts, _ := g["weighted-sticky"].(map[string]any)
-		weights, _ := opts["weights"].(map[string]any)
 		for _, member := range members {
 			n, _ := member.(string)
 			graph[name] = append(graph[name], n)
 			if actual[n] == nil {
 				continue
 			}
-			weight := any(1)
-			if v, ok := opts["default-weight"]; ok {
-				weight = v
-			}
-			if v, ok := weights[n]; ok {
-				weight = v
-			}
-			number, err := strconv.ParseFloat(fmt.Sprint(weight), 64)
-			if err != nil || number < 0 {
-				return fmt.Errorf("节点组 %s 的节点权重无效", name)
-			}
-			if number > 0 {
-				set[n] = true
-			}
+			set[n] = true
 		}
 		candidates[name] = set
-		if g["type"] == "load-balance" && len(set) < 2 {
-			return fmt.Errorf("节点组 %s 发布前必须配置至少两个有效代理节点", name)
+		minimum := 2
+		if g["strategy"] == "weighted-sticky" {
+			minimum = 1
+		}
+		if g["type"] == "load-balance" && len(set) < minimum {
+			return fmt.Errorf("节点组 %s 发布前必须配置至少 %d 个有效代理节点", name, minimum)
 		}
 	}
 	active, done := map[string]bool{}, map[string]bool{}
@@ -100,7 +88,6 @@ func ValidatePublishedSubscription(config map[string]any, proxies []map[string]a
 			return err
 		}
 	}
-	excluded := map[string]map[string]bool{}
 	list, _ := config["site-blacklist"].([]any)
 	for _, raw := range list {
 		entry, ok := raw.(map[string]any)
@@ -130,15 +117,7 @@ func ValidatePublishedSubscription(config map[string]any, proxies []map[string]a
 			if !candidates[name][proxy] {
 				return fmt.Errorf("黑名单节点 %s 不在节点组 %s 的有效成员中", proxy, name)
 			}
-			if excluded[name] == nil {
-				excluded[name] = map[string]bool{}
-			}
-			excluded[name][proxy] = true
-		}
-	}
-	for name, nodes := range excluded {
-		if len(nodes) >= len(candidates[name]) {
-			return fmt.Errorf("节点组 %s 必须保留至少一个未配置黑名单的有效代理", name)
+
 		}
 	}
 	return nil

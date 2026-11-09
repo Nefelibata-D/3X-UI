@@ -30,6 +30,7 @@ func EffectiveWeights(cat *catalog.Catalog, clientID int, nodes map[string]NodeW
 
 var (
 	ErrNoSelectableOutlet = errors.New("no selectable outlet")
+	ErrNonPositiveWeight  = errors.New("权重必须为正整数，请修改零值或负值")
 	ErrInvalidMode        = errors.New("ratio mode must be inherit or custom")
 )
 
@@ -42,8 +43,8 @@ func ValidateMode(mode string) error {
 
 func ValidateWeights(weights map[string]int64) error {
 	for _, w := range weights {
-		if w < 0 {
-			return ErrNegativeWeight
+		if w <= 0 {
+			return ErrNonPositiveWeight
 		}
 	}
 	return nil

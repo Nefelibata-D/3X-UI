@@ -151,19 +151,16 @@ export default function ClientLoadBalancingTab({ clientId, mode }: ClientLoadBal
         return;
       }
     }
-    if (ratioMode === 'custom') {
-      const sum = query.data.nodes
-        .filter((node) => node.selectable)
-        .reduce((acc, node) => acc + Math.max(0, Number(weights[node.nodeKey]) || 0), 0);
-      if (sum <= 0) {
-        message.error('自定义权重在可选出口内必须至少有一个正值。');
-        return;
-      }
-    }
     const payload: Record<string, number> = {};
-    for (const node of query.data.nodes) {
-      const value = Math.max(0, Math.round(Number(weights[node.nodeKey]) || 0));
-      if (value > 0) payload[node.nodeKey] = value;
+    if (ratioMode === 'custom') {
+      for (const node of query.data.nodes) {
+        const value = weights[node.nodeKey];
+        if (!Number.isSafeInteger(value) || value <= 0) {
+          message.error(`${node.name} 的权重必须为正整数`);
+          return;
+        }
+        payload[node.nodeKey] = value;
+      }
     }
     mutation.mutate({
       mode: ratioMode,
@@ -258,7 +255,7 @@ export default function ClientLoadBalancingTab({ clientId, mode }: ClientLoadBal
       width: 120,
       render: (_, node) => (
         <InputNumber
-          min={0}
+          min={1}
           step={1}
           precision={0}
           style={{ width: 56 }}

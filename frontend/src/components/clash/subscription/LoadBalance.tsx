@@ -429,12 +429,6 @@ function BalanceContent({
                     }
                   />
                 )}
-                {g.strategy === 'weighted-sticky' && (
-                  <Alert
-                    type="info"
-                    title="订阅生成时自动填入管理端权重、官方用户 UUID、面板 GUID 和检查接口；保存订阅前可点击“校验配置”查看最终 YAML。"
-                  />
-                )}
                 <strong>黑名单规则</strong>
                 {ruleRows(g.name).map((e) => (
                   <div className="template-route-card template-blacklist-row" key={e.rule}>

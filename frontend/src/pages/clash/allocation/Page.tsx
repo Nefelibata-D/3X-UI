@@ -186,6 +186,10 @@ export default function LoadBalancingPage() {
       nodeKey: node.key,
       ...drafts[node.key],
     }));
+    if (items.some((item) => !Number.isSafeInteger(item.defaultWeight) || item.defaultWeight <= 0)) {
+      message.error('每个节点的默认权重必须为正整数');
+      return;
+    }
     saveMutation.mutate(items);
   };
 
@@ -378,7 +382,7 @@ export default function LoadBalancingPage() {
       render: (_, node) => (
         <InputNumber
           className="lb-number-input"
-          min={0}
+          min={1}
           precision={0}
           aria-label={`${node.name} 默认权重`}
           value={drafts[node.key]?.defaultWeight ?? 0}

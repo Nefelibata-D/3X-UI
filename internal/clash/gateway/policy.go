@@ -215,7 +215,7 @@ func (p *Policy) admitLocked(at time.Time) (bool, *StateChange, []func()) {
 			return false, change, aborts
 		}
 	}
-	// Grace restrictions belong to the client; the server only enforces final cutoff.
+	// Quota observations do not restrict client routing; the server enforces final cutoff.
 	switch p.state {
 	case StateDisabled:
 		return false, change, aborts

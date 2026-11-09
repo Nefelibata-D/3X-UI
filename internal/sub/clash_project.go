@@ -20,15 +20,25 @@ type projectProxySource struct {
 type projectSubscription struct {
 	binding *subscription.SubscriptionBinding
 	inspect bool
+	context bool
 	sources []projectProxySource
 }
 
-func (s *SubClashService) ProjectSubscription(subID, host string, binding *subscription.SubscriptionBinding) (string, error) {
-	project := &projectSubscription{binding: binding, inspect: binding == nil}
+func (s *SubClashService) ProjectSubscription(subID, host string, binding *subscription.SubscriptionBinding, context ...bool) (string, error) {
+	project := &projectSubscription{binding: binding, inspect: binding == nil, context: len(context) > 0 && context[0]}
 	body, _, err := s.getClashWithProject(subID, host, false, project)
 	if err == nil && body == "" {
 		if binding == nil {
 			body = "[]"
+			if project.context {
+				req := NewSubService("")
+				req.address = host
+				raw, marshalErr := yaml.Marshal(map[string]any{"proxies": []any{}, "publication": subscription.PublicationSnapshot(subID, req.projectPublicBaseURL())})
+				if marshalErr != nil {
+					return "", marshalErr
+				}
+				body = string(raw)
+			}
 		} else {
 			err = errors.New("订阅没有可用的授权节点")
 		}
@@ -84,7 +94,11 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 				"nodeKey": nodeKeys[name], "inboundKey": inboundKeys[name], "inboundName": inboundNames[name], "hostOverride": hostOverrides[name],
 			})
 		}
-		body, err := yaml.Marshal(items)
+		var output any = items
+		if p.context {
+			output = map[string]any{"proxies": items, "publication": subscription.PublicationSnapshot(subID, publicBaseURL)}
+		}
+		body, err := yaml.Marshal(output)
 		return string(body), true, err
 	}
 	config, bound, err := subscription.RenderManagedSubscription(subID, p.binding, actual, nodeKeys, inboundKeys, publicBaseURL)

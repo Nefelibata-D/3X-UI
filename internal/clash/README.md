@@ -36,9 +36,9 @@
 
 管理 API /panel/api/clash/：overview；POST weights（items: [{nodeKey, defaultWeight, capacityBytes, resetSchedule: {day, minute, disabled:false}}]）；GET clients/:id 返回节点配置与账本；POST clients/:id/ratio 一次保存 {mode, weights, limits, resetMode}，limits 是 nodeKey 到字节上限的映射；policies/reset 重置一个节点/客户端账本；sync、policy/apply、policy/report。前端显式使用 application/json。全局 budgets 写接口已删除。
 
-网关位于 gateway/，面板进程内 TCP SOCKS 数据面，不是 node-agent。子面板必须部署带扩展的 3x-ui。预算达到后进入宽限，服务端继续计量并允许新连接，宽限行为由客户端主动限制；时间或额外流量先到后，仅终止该用户的网关连接并拒绝新连接，不关闭共享代理入站。保留版本屏障、幂等重置和持久化错误传播。UDP 不支持。
+网关位于 gateway/，面板进程内 TCP SOCKS 数据面，不是 node-agent。子面板必须部署带扩展的 3x-ui。预算达到后进入宽限，服务端继续计量并允许新连接，客户端只观察额度状态，不限制连接或清理绑定；时间或额外流量先到后，仅终止该用户的网关连接并拒绝新连接，不关闭共享代理入站。保留版本屏障、幂等重置和持久化错误传播。UDP 不支持。
 
-客户端接口 GET <basePath>/v1/nodes/:node/status 使用官方客户端 UUID 和出口面板 GUID；200/409/403 表示正常/宽限/停用；未应用或无法确认回报为 503。Mihomo 无需修改；weighted-sticky 首次绑定按权重抽选、随后保持黏性，正式订阅消费由 subscription/policy.go 接入，生成下列加权订阅字段。
+客户端接口 GET <basePath>/v1/nodes/:node/status 使用官方客户端 UUID 和出口面板 GUID；200/409/403 表示正常/宽限/停用；未应用或无法确认回报为 503。Mihomo 使用服务器层级 weighted-sticky：首次绑定按服务器权重抽选、服务器内代理均分，随后保持黏性，正式订阅消费由 subscription/policy.go 接入，生成下列加权订阅字段。
 
 项目 UI 直接中文，官方国际化不改。项目组件独立文件，复用官方样式和请求工具。客户端列表接入独立节点流量组件，流量条利用剩余宽度，移除重复的“剩余”列，“实时速度”说明其为观测速率；官方账户总额度和基础 API 含义不改。关联变更后刷新项目缓存，节点报告每 10 秒刷新。
 
@@ -122,13 +122,13 @@ YAML 编辑器使用校验器返回的 AST 源位置实时显示行内错误；�
 
 ## 加权订阅发布与公开检查接口
 
-`subscription/policy.go` 在官方代理完成命名、主机覆盖与组注入后，复用现有默认/用户权重生成 `weighted-sticky.weights`，按代理所属官方节点填写 `node-ids`（面板 GUID），复用官方用户 UUID；不存在第二套可编辑权重或凭据。共享订阅身份若对应多个官方用户，不能确定单一 control 凭据时明确拒绝。默认超时/绑定数为 300 秒/10000，control 查询超时/最短间隔/宽限间隔为 3/30/300 秒；模板已有调优参数保留。受管 weights、UUID、node-ids、control 地址由发布器负责，不能用模板覆盖绕开授权。
+`subscription/policy.go` 在官方代理完成命名、主机覆盖与组注入后，复用现有默认/用户权重生成 `weighted-sticky.nodes`，每服务器仅一份名称、正整数权重、面板 GUID 和代理列表，复用官方用户 UUID；不存在第二套可编辑权重或凭据。共享订阅身份若对应多个官方用户，不能确定单一 control 凭据时明确拒绝。默认超时/绑定数为 300 秒/10000，control 查询超时/最短间隔/宽限间隔为 3/30/300 秒；模板已有调优参数保留。受管 nodes、UUID、control 地址由发布器负责，不能用模板覆盖绕开授权。
 
-负载均衡未指定健康 URL 时默认输出 `<Clash 订阅地址前缀>/_project/health`、预期 204、间隔 300 秒、lazy=false；已有健康 URL 保留。地址使用官方 BuildURLs，包含自定义反代域名和路径前缀。`subscription/http.go` 注册公开 GET/HEAD health 和 UUID Bearer 鉴权的 `/v1/nodes/:node/status`，在订阅服务 `subClashPath/_project` 和面板 basePath 下复用处理器。健康接口无响应体且禁止缓存；不代表额度正常。额度接口继续只认已应用策略，不可确认时返回 503，不伪造 normal。
+负载均衡未指定健康 URL 时默认输出 `<Clash 订阅地址前缀>/_project/health`、预期 204、weighted-sticky 间隔 1800 秒（其他负载策略保留 300 秒）、lazy=false；已有健康 URL 保留。地址使用官方 BuildURLs，包含自定义反代域名和路径前缀。`subscription/http.go` 注册公开 GET/HEAD health 和 UUID Bearer 鉴权的 `/v1/nodes/:node/status`，在订阅服务 `subClashPath/_project` 和面板 basePath 下复用处理器。健康接口无响应体且禁止缓存；不代表额度正常。额度接口继续只认已应用策略，不可确认时返回 503，不伪造 normal。
 
-前端创建/迁移加权负载时，不支持的组置灰并通过悬浮说明原因：嵌套代理组、系统出站、订阅内无面板身份的代理或不足两个受管代理。模板空组可留待注入。普通代理组引用不受影响。前后端均保留校验；published 校验覆盖整数权重、权重总和、control URL/UUID、超时、node-ids 对齐与 32 个服务器上限。切换为其他策略时移除不适用的 weighted-sticky 参数。
+前端创建/迁移加权负载时，不支持的组置灰并通过悬浮说明原因：嵌套代理组、系统出站、订阅内无面板身份的代理或没有受管代理。模板空组可留待注入。普通代理组引用不受影响。前后端均保留校验；published 校验覆盖整数权重、权重总和、control URL/UUID、超时、服务器归属与组成员完全对齐与 32 个服务器上限。切换为其他策略时移除不适用的 weighted-sticky 参数。
 
-“校验配置”复用实际发布路径，返回最终 YAML 只读预览；保存和下载也使用相同生成逻辑。链式代理连接箭头是拖动卡片的相邻元素，不随代理卡片进入拖动副本。
+用户订阅编辑器在打开时，通过既有 proxies 接口的 `context=1` 参数一次取得代理及发布上下文（官方用户 UUID、节点 GUID、有效权重、control 地址）；原无参数接口仍返回代理列表。编辑过程中前端本地合并并校验有效成员、注入受管字段，直接更新左侧 YAML，不再弹出单独校验结果。待注入标签统一读取当前有效组成员；生成字段不作为用户草稿中的第二份权威数据。保存和下载继续由后端重新读取权威数据并执行实际发布校验。项目上游接线仅扩展 `internal/sub/clash_project.go` 的管理端 inspect 输出和 `internal/web/controller/clash_subscription.go` 的查询参数，订阅下载语义不变。链式代理连接箭头是拖动卡片的相邻元素，不随代理卡片进入拖动副本。
 
 上游接线仅限：internal/sub/clash_service.go 的项目渲染调用、internal/sub/controller.go 的项目路由注册；已有项目适配 clash_project.go 传入官方订阅 URL，controller/clash_subscription.go 返回生成预览，clash_status.go 委托项目处理器。新增业务保持在 internal/clash/。
 
@@ -149,3 +149,18 @@ YAML 编辑器使用校验器返回的 AST 源位置实时显示行内错误；�
 - 前端 37 个整理前干净文件的 AST / 样式比对仅有引用路径差异；5 个整理前已有逻辑改动的文件没有当时完整快照，不用 HEAD 冒充它们的整理前基线。迁移脚本的操作范围为文件路径与引用替换；前端类型检查及缓存/删除、加权发布、覆盖保存的 12 项定向回归本轮通过。生产构建在目录整理阶段通过，本次后端初始化修正未改前端生产代码。
 
 旧 `test/clash/...` 在整理前已有已删除接口导致的编译失败，不计入本轮通过范围。没有重启开发面板或运行真实跨节点代理连接验收。新增回归位于 `internal/clash/test/lifecycle_test.go`，项目测试保持未跟踪；本轮未提交、暂存或推送。
+
+
+服务器级选路（2026-11-08）：新 YAML 禁止 weights/default-weight/control.node-ids；旧模板需删除旧字段，由发布器重新生成 nodes，手写客户端配置须显式迁移。同服务器多个代理不放大权重。健康后黑名单择优；黑名单全覆盖允许发布，由客户端按请求筛选后放宽。weighted-sticky 允许单个受管代理，其他负载策略原有最小成员数不变。
+
+客户端仅调度官方每次拨号的候选，保留官方路由、总重试次数、总超时和等待机制。健康沿用官方探测实例，完成通知读取同 URL 的有效记录；服务器全部实际代理异常时异步触发额度查询。额度记录不再是客户端准入条件，服务器继续强制执行限额。
+
+## 2026-11-09 面板契约修正
+
+节点默认权重和客户端自定义权重保存时只接受正整数。自定义模式必须覆盖所有已授权节点；已有零值不自动改写，需在管理页明确修正。额度 0 仍表示无限，与权重无关。读取旧权重和网关额度同步保持独立，错误权重不自动撤销已下发额度策略。
+
+发布校验补齐 weighted-sticky.site-groups：检查列表/字段类型、非空且唯一名称、至少一个域名或后缀、IDNA 归一化后的同类归属冲突。精确域名和后缀分别校验归属，允许跨类型重叠和同组重复，与当前 Mihomo 一致。YAML 编辑器 schema 同步必填与非空列表要求。
+
+额度状态只用于客户端观察；服务器在宽限期间继续计量，时间或额外预算先到后执行最终断流，不再采用客户端站点快照限制。
+
+本轮实跑：订阅、额度分配、网关策略定向 Go 测试通过；前端类型检查、定向 lint、5 项订阅交互/schema 测试及生产构建通过。面板生成 YAML 使用当前 Mihomo 源码 go run . -t 验证通过。未更新 Docker 运行实例，未重跑真实跨容器流量；共享入站真实 Xray 测试仍因未设置 TEST_XRAY_BINARY 跳过。项目测试保持未跟踪。

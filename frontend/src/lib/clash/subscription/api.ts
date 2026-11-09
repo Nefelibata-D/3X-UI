@@ -5,6 +5,7 @@ import {
   templateSchema,
   subscriptionSchema,
   subscriptionProxySchema,
+  publicationContextSchema,
   type RuleSet,
   type Template,
   type Subscription,
@@ -42,7 +43,10 @@ export const fetchTemplates = () =>
 export const fetchSubscription = (id: number | undefined) =>
   get(clientPath(id), subscriptionSchema);
 export const fetchSubscriptionProxies = (id: number | undefined) =>
-  get(clientPath(id) + '/proxies', subscriptionProxySchema.array());
+  get(
+    clientPath(id) + '/proxies?context=1',
+    z.object({ proxies: subscriptionProxySchema.array(), publication: publicationContextSchema }),
+  );
 export async function saveRuleSet(row: RuleSet) {
   success(await HttpUtil.post(root + '/rulesets', ruleSetSchema.parse(row), json));
 }

@@ -59,34 +59,7 @@ func (p *subscriptionPublication) inject(config map[string]any, nodeKeys map[str
 	if !weighted {
 		return nil
 	}
-	db, err := storage.DB()
-	if err != nil {
-		return err
-	}
-	var clients []model.ClientRecord
-	if err := db.Where("sub_id = ?", p.subID).Find(&clients).Error; err != nil {
-		return err
-	}
-	if len(clients) != 1 {
-		return errors.New("加权订阅必须对应唯一的官方用户，不能共用多个用户的订阅身份")
-	}
-	cat, err := policy.LoadCatalogOrError()
-	if err != nil {
-		return err
-	}
-	client, ok := cat.ClientByID(clients[0].Id)
-	if !ok {
-		return errors.New("订阅用户不在官方目录中")
-	}
-	rows, err := allocation.ListNodeWeights()
-	if err != nil {
-		return err
-	}
-	ratio, err := allocation.GetRatio(client.ID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-	weights, err := allocation.EffectiveWeights(cat, client.ID, allocation.NodeConfigMap(cat, rows), ratio)
+	cat, client, weights, err := publicationInputs(p.subID)
 	if err != nil {
 		return err
 	}
@@ -129,12 +102,24 @@ func InjectSubscriptionPolicy(config map[string]any, cat *catalog.Catalog, clien
 			}
 		}
 		members, _ := group["proxies"].([]any)
-		generatedWeights, ids := map[string]any{}, map[string]any{}
+		if _, old := opts["weights"]; old {
+			return fmt.Errorf("%s: weights removed; migrate to nodes", name)
+		}
+		if _, old := opts["default-weight"]; old {
+			return fmt.Errorf("%s: default-weight removed; migrate to nodes", name)
+		}
+		generated := []any{}
+		serverNodes := map[string]map[string]any{}
+		seen := map[string]bool{}
 		for _, raw := range members {
 			proxy, ok := raw.(string)
 			if !ok {
 				return fmt.Errorf("%s 的成员必须是代理名称", name)
 			}
+			if seen[proxy] {
+				return fmt.Errorf("%s: duplicate proxy %s", name, proxy)
+			}
+			seen[proxy] = true
 			key := nodeKeys[proxy]
 			node, exists := cat.NodeByKey(key)
 			if !exists || !authorized[key] || strings.TrimSpace(node.Guid) == "" {
@@ -144,10 +129,18 @@ func InjectSubscriptionPolicy(config map[string]any, cat *catalog.Catalog, clien
 			if !selectable {
 				return fmt.Errorf("加权组 %s 的成员 %s 所属节点不可用", name, proxy)
 			}
-			generatedWeights[proxy], ids[proxy] = weight, node.Guid
+			if weight <= 0 {
+				return fmt.Errorf("节点 %s 权重必须为正整数", node.Name)
+			}
+			item := serverNodes[node.Guid]
+			if item == nil {
+				item = map[string]any{"name": node.Name, "id": node.Guid, "weight": weight, "proxies": []any{}}
+				serverNodes[node.Guid] = item
+				generated = append(generated, item)
+			}
+			item["proxies"] = append(item["proxies"].([]any), proxy)
 		}
-		opts["weights"] = generatedWeights
-		opts["default-weight"] = 0
+		opts["nodes"] = generated
 		resilience := map[string]any{}
 		if raw, exists := opts["resilience"]; exists {
 			var ok bool
@@ -164,7 +157,10 @@ func InjectSubscriptionPolicy(config map[string]any, cat *catalog.Catalog, clien
 				return fmt.Errorf("%s control 必须是对象", name)
 			}
 		}
-		control["base-url"], control["uuid"], control["node-ids"] = strings.TrimRight(baseURL, "/"), client.UUID, ids
+		if _, old := control["node-ids"]; old {
+			return fmt.Errorf("%s: control.node-ids removed; migrate to nodes", name)
+		}
+		control["base-url"], control["uuid"] = strings.TrimRight(baseURL, "/"), client.UUID
 		for key, value := range map[string]any{"timeout": 3, "min-interval": 30, "grace-interval": 300} {
 			if _, exists := control[key]; !exists {
 				control[key] = value
@@ -189,8 +185,88 @@ func setSubscriptionHealth(group map[string]any, baseURL string) {
 	}
 	if _, exists := group["interval"]; !exists {
 		group["interval"] = 300
+		if group["strategy"] == "weighted-sticky" {
+			group["interval"] = 1800
+		}
 	}
 	if _, exists := group["lazy"]; !exists {
 		group["lazy"] = false
 	}
+}
+
+func publicationInputs(subID string) (*catalog.Catalog, catalog.ClientInfo, []allocation.RatioResult, error) {
+	db, err := storage.DB()
+	if err != nil {
+		return nil, catalog.ClientInfo{}, nil, err
+	}
+	var clients []model.ClientRecord
+	if err := db.Where("sub_id = ?", subID).Find(&clients).Error; err != nil {
+		return nil, catalog.ClientInfo{}, nil, err
+	}
+	if len(clients) != 1 {
+		return nil, catalog.ClientInfo{}, nil, errors.New("加权订阅必须对应唯一的官方用户，不能共用多个用户的订阅身份")
+	}
+	cat, err := policy.LoadCatalogOrError()
+	if err != nil {
+		return nil, catalog.ClientInfo{}, nil, err
+	}
+	client, ok := cat.ClientByID(clients[0].Id)
+	if !ok {
+		return nil, catalog.ClientInfo{}, nil, errors.New("订阅用户不在官方目录中")
+	}
+	rows, err := allocation.ListNodeWeights()
+	if err != nil {
+		return nil, catalog.ClientInfo{}, nil, err
+	}
+	ratio, err := allocation.GetRatio(client.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, catalog.ClientInfo{}, nil, err
+	}
+	weights, err := allocation.EffectiveWeights(cat, client.ID, allocation.NodeConfigMap(cat, rows), ratio)
+	if err != nil {
+		return nil, catalog.ClientInfo{}, nil, err
+	}
+	return cat, client, weights, nil
+}
+
+type PublicationNode struct {
+	Name   string `json:"name"`
+	ID     string `json:"id"`
+	Weight int64  `json:"weight"`
+}
+type PublicationContext struct {
+	BaseURL string                     `json:"baseURL"`
+	UUID    string                     `json:"uuid"`
+	Nodes   map[string]PublicationNode `json:"nodes"`
+	Error   string                     `json:"error"`
+}
+
+// PublicationSnapshot supplies editor data; saving always reloads the authority.
+func PublicationSnapshot(subID, baseURL string) PublicationContext {
+	out := PublicationContext{BaseURL: strings.TrimRight(baseURL, "/"), Nodes: map[string]PublicationNode{}}
+	if err := validateControlURL(baseURL); err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	cat, client, weights, err := publicationInputs(subID)
+	if err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	if !validControlUUID(client.UUID) {
+		out.Error = "加权订阅用户缺少有效的官方 UUID"
+		return out
+	}
+	out.UUID = client.UUID
+	authorized := map[string]bool{}
+	for _, key := range cat.AuthorizedNodeKeys(client.ID) {
+		authorized[key] = true
+	}
+	for _, weight := range weights {
+		node, ok := cat.NodeByKey(weight.Key)
+		if ok && authorized[weight.Key] && strings.TrimSpace(node.Guid) != "" {
+			out.Nodes[weight.Key] = PublicationNode{Name: node.Name, ID: node.Guid, Weight: weight.Weight}
+		}
+	}
+	return out
 }

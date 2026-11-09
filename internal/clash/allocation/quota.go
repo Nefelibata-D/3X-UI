@@ -46,8 +46,8 @@ func SaveNodeWeights(cat *catalog.Catalog, inputs []NodeWeightInput) error {
 		if in.DefaultWeight != nil {
 			weight = *in.DefaultWeight
 		}
-		if weight < 0 {
-			return ErrNegativeWeight
+		if weight <= 0 {
+			return ErrNonPositiveWeight
 		}
 		var nodeID *int
 		if !node.IsLocal {
@@ -137,6 +137,11 @@ func SaveClientRatio(cat *catalog.Catalog, clientID int, mode string, weights, l
 	}
 
 	if mode == ModeCustom {
+		for _, key := range cat.AuthorizedNodeKeys(clientID) {
+			if weights[key] <= 0 {
+				return fmt.Errorf("节点 %s：%w", key, ErrNonPositiveWeight)
+			}
+		}
 		nodeWeights, err := ListNodeWeights()
 		if err != nil {
 			return err

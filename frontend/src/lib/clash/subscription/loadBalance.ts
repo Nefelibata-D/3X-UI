@@ -10,11 +10,14 @@ export function weightedGroupIssue(
   const nested = members.filter((name) => groupNames.includes(name));
   if (nested.length) return '加权负载均衡不能包含其他代理组：' + nested.join('、');
   const system = members.filter((name) => builtins.includes(name));
-  if (system.length) return '加权负载均衡不能查询系统出站的服务器额度：' + system.join('、');
+  if (system.length)
+    return (
+      '当前受管加权组只支持关联面板节点的代理；系统出站不参与服务器额度管理：' + system.join('、')
+    );
   if (managedProxyNames) {
     const unknown = members.filter((name) => !managedProxyNames.includes(name));
     if (unknown.length) return '代理无法关联授权面板：' + unknown.join('、');
-    if (new Set(members).size < 2) return '请先为代理组分配至少两个不同的受管代理';
+    if (new Set(members).size < 1) return '请先为代理组分配至少一个受管代理';
   }
   return '';
 }
@@ -39,12 +42,7 @@ export function loadBalanceModel(content: string) {
         const members = g.get('proxies');
         const names = isSeq(members) ? members.items.map(String) : [];
         const candidates = new Set(names.filter((n) => actual.includes(n)));
-        const weighted = g.get('weighted-sticky');
-        const effective = [...candidates].filter(
-          (n) =>
-            !isMap(weighted) ||
-            Number(weighted.getIn(['weights', n]) ?? weighted.get('default-weight') ?? 1) > 0,
-        );
+        const effective = [...candidates];
         return [
           {
             index,
@@ -99,6 +97,41 @@ export function loadBalanceErrors(
   };
   for (const group of groups) {
     if (group.type !== 'load-balance' || group.strategy !== 'weighted-sticky') continue;
+    const options = doc.getIn(['proxy-groups', group.index, 'weighted-sticky']);
+    if (isMap(options)) {
+      if (
+        options.has('weights') ||
+        options.has('default-weight') ||
+        options.hasIn(['resilience', 'control', 'node-ids'])
+      )
+        add(`${group.name}：旧加权格式已移除，请迁移到 nodes。`, options);
+      const nodes = options.get('nodes');
+      if (isSeq(nodes)) {
+        const owners = new Set<string>(),
+          ids = new Set<string>();
+        let total = 0;
+        for (const node of nodes.items) {
+          if (!isMap(node)) continue;
+          const id = String(node.get('id') ?? ''),
+            weight = Number(node.get('weight'));
+          if (!id || /[/\s]/.test(id) || ids.has(id)) add('服务器 id 必须有效且唯一。', node);
+          ids.add(id);
+          if (!Number.isSafeInteger(weight) || weight <= 0) add('服务器权重必须为正整数。', node);
+          total += weight;
+          const proxies = node.get('proxies');
+          if (isSeq(proxies))
+            for (const proxy of proxies.items) {
+              const name = String(proxy);
+              if (owners.has(name) || !group.members.includes(name))
+                add(`代理 ${name} 归属重复或不在本组。`, proxy);
+              owners.add(name);
+            }
+        }
+        if (!Number.isSafeInteger(total)) add('服务器权重总和超出安全整数范围。', nodes);
+        for (const member of group.members)
+          if (!owners.has(member)) add(`nodes 缺少代理 ${member}。`, nodes);
+      }
+    }
     const issue = weightedGroupIssue(
       group.members,
       groups.map((g) => g.name),
@@ -106,9 +139,13 @@ export function loadBalanceErrors(
     if (issue) add(`${group.name}：${issue}`, doc.getIn(['proxy-groups', group.index], true));
   }
   for (const g of groups)
-    if (stage === 'subscription' && g.type === 'load-balance' && g.effective.length < 2)
+    if (
+      stage === 'subscription' &&
+      g.type === 'load-balance' &&
+      g.effective.length < (g.strategy === 'weighted-sticky' ? 1 : 2)
+    )
       add(
-        `${g.name}：负载均衡至少需要两个不同的有效代理节点，DIRECT、策略组及零权重节点不计入。`,
+        `${g.name}：负载均衡至少需要 ${g.strategy === 'weighted-sticky' ? 1 : 2} 个有效代理，DIRECT 和策略组不计入。`,
         doc.getIn(['proxy-groups', g.index], true),
       );
   const entries = doc.get('site-blacklist');
@@ -154,22 +191,5 @@ export function loadBalanceErrors(
         }
       }
     }
-  for (const group of groups.filter((g) => g.type === 'load-balance')) {
-    const excluded = new Set<string>();
-    if (isSeq(entries))
-      for (const entry of entries.items) {
-        if (isMap(entry) && (!entry.get('group') || entry.get('group') === group.name))
-          excluded.add(String(entry.get('proxy')));
-      }
-    if (
-      stage === 'subscription' &&
-      excluded.size &&
-      !group.effective.some((name) => !excluded.has(name))
-    )
-      add(
-        `${group.name}：必须保留至少一个未配置黑名单的有效代理节点。`,
-        doc.getIn(['proxy-groups', group.index], true),
-      );
-  }
   return errors;
 }

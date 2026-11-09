@@ -16308,7 +16308,7 @@
         "tags": [
           "Load Balancing Gateway"
         ],
-        "summary": "List authorized proxies with their official generated Clash configurations and node keys for administrator subscription preview.",
+        "summary": "List authorized proxies with their official generated Clash configurations and node keys. With context=1, return {proxies, publication} including the administrator-only publication snapshot (baseURL, uuid, nodes, error) for local subscription preview.",
         "operationId": "get_panel_api_clash_clients_id_subscription_proxies",
         "parameters": [
           {

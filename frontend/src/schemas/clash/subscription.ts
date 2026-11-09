@@ -88,3 +88,11 @@ export const subscriptionProxySchema = z.object({
   config: z.record(z.string(), z.unknown()),
 });
 export type SubscriptionProxy = z.infer<typeof subscriptionProxySchema>;
+
+export const publicationContextSchema = z.object({
+  baseURL: z.string(),
+  uuid: z.string(),
+  error: z.string(),
+  nodes: z.record(z.string(), z.object({ name: z.string(), id: z.string(), weight: z.number() })),
+});
+export type PublicationContext = z.infer<typeof publicationContextSchema>;

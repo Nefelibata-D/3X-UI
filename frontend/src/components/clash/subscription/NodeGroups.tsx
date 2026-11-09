@@ -7,7 +7,10 @@ import { Alert, Button, Input, Select, Space, Tag } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isSeq, parseDocument } from 'yaml';
 
-import { dependencyCycle, templateDependencies } from '@/lib/clash/subscription/template/validation';
+import {
+  dependencyCycle,
+  templateDependencies,
+} from '@/lib/clash/subscription/template/validation';
 import {
   builtins,
   groupTypes,
@@ -22,6 +25,7 @@ interface Props {
   entryClassName?: (name: string) => string;
   content: string;
   referenceContent?: string;
+  effectiveContent?: string;
   groups: { name: string; type: string }[];
   bindings: Binding[];
   readonly: boolean;
@@ -31,6 +35,7 @@ interface Props {
 export default function NodeGroups({
   content,
   referenceContent = content,
+  effectiveContent = content,
   groups,
   bindings,
   readonly,
@@ -43,7 +48,7 @@ export default function NodeGroups({
 }: Props) {
   const uid = useId();
   const [editError, setEditError] = useState('');
-  const dependencies = templateDependencies(content).nodes;
+  const effectiveDependencies = templateDependencies(effectiveContent).nodes;
   const referenceNodes = templateDependencies(referenceContent).nodes;
   const [draft, setDraft] = useState<{
     original: string;
@@ -322,7 +327,7 @@ export default function NodeGroups({
                 </span>
                 {group.type === 'load-balance' && <Tag color="purple">负载均衡</Tag>}
                 <Tag color="blue">{group.type.toUpperCase()}</Tag>
-                {dependencies.find((n) => n.name === group.name)?.pending && (
+                {effectiveDependencies.find((n) => n.name === group.name)?.pending && (
                   <Tag color="orange">待客户端注入</Tag>
                 )}
                 {!readonly && (

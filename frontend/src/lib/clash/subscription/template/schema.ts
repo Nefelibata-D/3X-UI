@@ -21,11 +21,22 @@ balanceProperties['weighted-sticky'] = {
   title: '按权重保持节点绑定',
   properties: {
     'idle-timeout': { type: 'integer', minimum: 1, maximum: 9223372036, title: '空闲超时（秒）' },
-    'default-weight': { type: 'integer', minimum: 0, title: '默认权重' },
-    weights: {
-      type: 'object',
-      additionalProperties: { type: 'integer', minimum: 0 },
-      title: '代理名称与权重',
+    nodes: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 32,
+      title: '服务器及所属代理',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'id', 'weight', 'proxies'],
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          id: { type: 'string', minLength: 1 },
+          weight: { type: 'integer', minimum: 1 },
+          proxies: { ...strings, minItems: 1, uniqueItems: true },
+        },
+      },
     },
     'max-bindings': { type: 'integer', minimum: 1, title: '最大绑定数' },
     'site-groups': {
@@ -34,7 +45,15 @@ balanceProperties['weighted-sticky'] = {
         type: 'object',
         additionalProperties: false,
         required: ['name'],
-        properties: { name: { type: 'string' }, domains: strings, 'domain-suffixes': strings },
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          domains: strings,
+          'domain-suffixes': strings,
+        },
+        anyOf: [
+          { required: ['domains'], properties: { domains: { ...strings, minItems: 1 } } },
+          { required: ['domain-suffixes'], properties: { 'domain-suffixes': { ...strings, minItems: 1 } } },
+        ],
       },
     },
     resilience: {
@@ -51,7 +70,6 @@ balanceProperties['weighted-sticky'] = {
             timeout: { type: 'integer', minimum: 1, maximum: 9223372036 },
             'min-interval': { type: 'integer', minimum: 1, maximum: 9223372036 },
             'grace-interval': { type: 'integer', minimum: 1, maximum: 9223372036 },
-            'node-ids': { type: 'object', additionalProperties: { type: 'string' } },
           },
         },
       },

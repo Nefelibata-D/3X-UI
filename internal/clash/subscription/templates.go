@@ -102,6 +102,9 @@ func SaveTemplate(t *YAMLTemplate) error {
 	if err != nil {
 		return err
 	}
+	if err := validateSiteSticky(config, groups); err != nil {
+		return err
+	}
 	if err := validateSubscriptionGraph(groups); err != nil {
 		return err
 	}

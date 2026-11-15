@@ -69,6 +69,9 @@ func ValidateWeightedSubscription(config map[string]any) error {
 	if err != nil {
 		return err
 	}
+	if err := validateSiteSticky(config, groups); err != nil {
+		return err
+	}
 	for name, group := range groups {
 		raw, exists := group["weighted-sticky"]
 		if !exists {

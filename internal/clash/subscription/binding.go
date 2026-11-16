@@ -19,6 +19,9 @@ type SubscriptionBinding struct {
 	UpdatedAt         int64                    `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 	SubID             string                   `json:"-" gorm:"primaryKey"`
 	TemplateID        uint                     `json:"templateId"`
+	RuleOrder         []string                 `json:"ruleOrder" gorm:"serializer:json"`
+	ProviderOrder     []string                 `json:"providerOrder" gorm:"serializer:json"`
+	PausedContent     string                   `json:"pausedContent"`
 	DisabledRules     []string                 `json:"disabledRules" gorm:"serializer:json"`
 	DisabledProviders []string                 `json:"disabledProviders" gorm:"serializer:json"`
 	DisabledGroups    []string                 `json:"disabledGroups" gorm:"serializer:json"`

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useLayoutEffect,
+  useCallback,
+  type ReactNode,
+} from 'react';
 import Sortable from 'sortablejs';
 import { isMap, isSeq, parseDocument } from 'yaml';
 
@@ -9,10 +17,18 @@ interface Props {
   content: string;
   enabled: boolean;
   onChange: (value: string) => void;
+  indices?: number[];
   children: ReactNode;
 }
 
-export function SortableTemplateList({ collection, content, enabled, onChange, children }: Props) {
+export function SortableTemplateList({
+  collection,
+  content,
+  enabled,
+  onChange,
+  children,
+  indices,
+}: Props) {
   const root = useRef<HTMLDivElement>(null);
   const move = useCallback(
     (from: number, to: number) => {
@@ -20,25 +36,34 @@ export function SortableTemplateList({ collection, content, enabled, onChange, c
       const list = doc.get(collection);
       if (!enabled || doc.errors.length || (!isMap(list) && !isSeq(list))) return;
       const items: unknown[] = list.items;
+      const ordered = indices ? indices.map((index) => items[index]) : items;
       if (
         !Number.isInteger(from) ||
         from < 0 ||
         to < 0 ||
-        from >= items.length ||
-        to >= items.length ||
+        from >= ordered.length ||
+        to >= ordered.length ||
         from === to
       )
         return;
-      const [item] = items.splice(from, 1);
-      items.splice(to, 0, item);
+      const [item] = ordered.splice(from, 1);
+      ordered.splice(to, 0, item);
+      indices?.forEach((index, i) => {
+        items[index] = ordered[i];
+      });
       onChange(doc.toString());
     },
-    [collection, content, enabled, onChange],
+    [collection, content, enabled, onChange, indices],
   );
+
+  const latestMove = useRef(move);
+  useLayoutEffect(() => {
+    latestMove.current = move;
+  }, [move]);
 
   useEffect(() => {
     if (!root.current || !enabled) return;
-    let next: Element | null = null;
+    let originalIndex = 0;
     const ownerDocument = root.current.ownerDocument;
     function cancelOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
@@ -54,11 +79,13 @@ export function SortableTemplateList({ collection, content, enabled, onChange, c
       fallbackTolerance: 3,
       fallbackClass: 'template-sort-preview',
       ghostClass: 'template-sort-position',
-      scroll: root.current.closest<HTMLElement>('.ant-tabs-body-holder') ?? true,
+      scroll:
+        root.current.closest<HTMLElement>('.subscription-route-scroll, .ant-tabs-body-holder') ??
+        true,
       bubbleScroll: false,
       scrollSensitivity: 48,
-      onChoose({ item }) {
-        next = item.nextElementSibling;
+      onChoose({ oldIndex }) {
+        originalIndex = oldIndex ?? 0;
         ownerDocument.addEventListener('keydown', cancelOnEscape, true);
       },
       onUnchoose() {
@@ -71,10 +98,11 @@ export function SortableTemplateList({ collection, content, enabled, onChange, c
         newDraggableIndex,
         originalEvent,
       }: Sortable.SortableEvent & { originalEvent?: Event }) {
-        from.insertBefore(item, next);
+        const siblings = Array.from(from.children).filter((child) => child !== item);
+        from.insertBefore(item, siblings[originalIndex] ?? null);
         if (originalEvent?.type === 'pointercancel') return;
         if (oldDraggableIndex !== undefined && newDraggableIndex !== undefined)
-          move(oldDraggableIndex, newDraggableIndex);
+          latestMove.current(oldDraggableIndex, newDraggableIndex);
       },
     };
     const sortable = Sortable.create(root.current, options);
@@ -82,7 +110,7 @@ export function SortableTemplateList({ collection, content, enabled, onChange, c
       ownerDocument.removeEventListener('keydown', cancelOnEscape, true);
       sortable.destroy();
     };
-  }, [enabled, move]);
+  }, [enabled, collection]);
 
   return (
     <MoveEntry value={move}>

@@ -27,6 +27,7 @@ import { CheckOutlined, CopyOutlined, StopOutlined, UndoOutlined } from '@ant-de
 import { stringify } from 'yaml';
 import type { ClientRecord } from '@/hooks/useClients';
 import TemplateInsert from '@/components/clash/subscription/TemplateInsert';
+import SubscriptionRoutes from './SubscriptionRoutes';
 import NodeGroups from '@/components/clash/subscription/NodeGroups';
 import TemplateWorkspace from '@/components/clash/subscription/TemplateWorkspace';
 import LoadBalance from '@/components/clash/subscription/LoadBalance';
@@ -270,8 +271,7 @@ function SubscriptionEditor({
           : '');
     const toggleBalance = (name: string) => {
       const current = entries(combined, 'proxy-groups').find(([id]) => id === name)?.[1] as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       const inherited = rows.find(([id]) => id === name)?.[1] as Record<string, unknown>;
       const enabled = current?.type === 'load-balance';
       const group = { ...(current ?? inherited) };
@@ -313,8 +313,7 @@ function SubscriptionEditor({
         balance &&
         (
           entries(combined, 'proxy-groups').find(([key]) => key === id)?.[1] as
-            | Record<string, unknown>
-            | undefined
+            Record<string, unknown> | undefined
         )?.type !== 'load-balance' &&
         (rows.find(([key]) => key === id)?.[1] as Record<string, unknown> | undefined)?.strategy ===
           'weighted-sticky'
@@ -336,8 +335,7 @@ function SubscriptionEditor({
                   aria-label={
                     (
                       entries(combined, 'proxy-groups').find(([key]) => key === id)?.[1] as
-                        | Record<string, unknown>
-                        | undefined
+                        Record<string, unknown> | undefined
                     )?.type === 'load-balance'
                       ? '关闭负载均衡'
                       : '开启负载均衡'
@@ -431,22 +429,21 @@ function SubscriptionEditor({
   }
 
   function routeEditor(section: 'rules' | 'rule-providers') {
-    if (source === 'template') return inherit(section);
-    const context = {
-      ...combined,
-      [section]: overlay[section] ?? (section === 'rules' ? [] : {}),
-    };
     return (
-      <>
-        <TemplateInsert
-          content={stringify(context)}
-          onChange={(value) => changeSection(section, value)}
-          tab={section === 'rules' ? 'routes' : 'providers'}
-          groups={groupRows.map((g) => g.name)}
-          rules={data.rules}
-          readonly={false}
-        />
-      </>
+      <SubscriptionRoutes
+        key={section}
+        section={section}
+        base={template?.content ?? '{}'}
+        binding={draft}
+        combined={combined}
+        groups={groupRows.map((g) => g.name)}
+        rules={data.rules}
+        change={(next) => {
+          setYamlDraft(undefined);
+          setYamlError('');
+          form.reset(next);
+        }}
+      />
     );
   }
   async function save() {
@@ -696,7 +693,7 @@ function SubscriptionEditor({
             },
           ]}
         />
-        {template && ['groups', 'providers', 'routes', 'load-balance'].includes(activeTab) && (
+        {template && ['groups', 'load-balance'].includes(activeTab) && (
           <div className="subscription-source-toggle">
             <Segmented<'template' | 'custom'>
               size="small"

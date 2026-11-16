@@ -6,17 +6,25 @@ import SortableTemplateRow, {
 import { useState, useId } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, Button, Form, Input, Select, Space, Tag } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, StopOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 
 interface Props {
+  visible?: (name: string) => boolean;
+  onDisable?: (name: string) => void;
   entryActions?: (name: string) => ReactNode;
   entryClassName?: (name: string) => string;
   content: string;
   onChange: (value: string) => void;
   tab: 'providers' | 'routes' | 'dialer';
   groups: string[];
-  rules: { id: number; name: string; code: string; filename: string; routing: boolean }[];
+  rules: {
+    id: number;
+    name: string;
+    code: string;
+    filename: string;
+    routing: boolean;
+  }[];
   readonly: boolean;
   onValidityChange?: (valid: boolean) => void;
 }
@@ -207,12 +215,16 @@ export default function TemplateInsert(props: Props) {
     <SortableTemplateList
       content={content}
       collection={collection}
+      indices={
+        props.visible ? rows.flatMap((row, i) => (props.visible!(row.label) ? [i] : [])) : undefined
+      }
       enabled={!readonly && !editing && !doc.errors.length}
       onChange={onChange}
     >
       {rows.map(({ entry, label: title }) => {
         const route = tab === 'routes' ? parseRouteRule(title) : undefined;
-        if (route && editing?.entry === entry && editor) return <div key={entry}>{editor}</div>;
+        if (props.visible && !props.visible(title)) return null;
+        if (editing?.entry === entry && editor) return <div key={entry}>{editor}</div>;
         const node = doc.getIn([collection, entry]);
         const behavior = isMap(node) ? String(node.get('behavior') ?? '') : '';
         const interval = isMap(node) ? node.get('interval') : undefined;
@@ -262,11 +274,21 @@ export default function TemplateInsert(props: Props) {
                   <Button
                     type="text"
                     danger
-                    title="移除"
-                    aria-label={'移除 ' + title}
-                    icon={<DeleteOutlined aria-hidden />}
+                    title={props.onDisable ? '禁用' : '移除'}
+                    aria-label={(props.onDisable ? '禁用 ' : '移除 ') + title}
+                    icon={
+                      props.onDisable ? (
+                        <StopOutlined aria-hidden />
+                      ) : (
+                        <DeleteOutlined aria-hidden />
+                      )
+                    }
                     disabled={!!editing || !!doc.errors.length}
                     onClick={() => {
+                      if (props.onDisable) {
+                        props.onDisable(title);
+                        return;
+                      }
                       doc.deleteIn([collection, entry]);
                       onChange(doc.toString());
                     }}
@@ -275,7 +297,6 @@ export default function TemplateInsert(props: Props) {
               )}
               {props.entryActions?.(title)}
             </SortableTemplateRow>
-            {editing?.entry === entry && editor}
           </div>
         );
       })}

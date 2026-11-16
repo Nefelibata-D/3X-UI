@@ -51,3 +51,54 @@
 .template-entry-form:has(.subscription-time-tag) .ant-form-item-label {
   width: 7em;
 }
+.template-entry-list > .subscription-custom-row {
+  background: color-mix(
+    in srgb,
+    var(--ant-color-success, #52c41a) 13%,
+    var(--ant-color-bg-container, white)
+  );
+  border-radius: 8px;
+}
+.subscription-disabled-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--ant-color-error, #ff4d4f) 9%,
+    var(--ant-color-bg-container, white)
+  );
+  color: var(--ant-color-text-secondary);
+}
+.subscription-disabled-row span:nth-child(2) {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.clash-template-controls .ant-tabs-body:has(.subscription-route-panel),
+.clash-template-controls [role="tabpanel"]:has(> .subscription-route-panel) {
+  height: 100%;
+}
+.subscription-route-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.subscription-route-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.subscription-route-filters {
+  flex: none;
+  margin-block: 6px;
+  width: fit-content;
+  margin-inline: auto;
+  padding: 5px 12px;
+  border: 1px solid var(--ant-color-border-secondary, #eee);
+  border-radius: 18px;
+  background: var(--ant-color-bg-container, white);
+}

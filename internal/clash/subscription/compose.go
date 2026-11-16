@@ -116,13 +116,21 @@ func ComposeSubscription(base string, binding SubscriptionBinding) (map[string]a
 			replacements[id] = item
 		}
 		out := []any{}
+		if key == "rules" {
+			for _, item := range added {
+				id, _ := identity(item)
+				if id != "MATCH" {
+					out = append(out, item)
+				}
+			}
+		}
 		for _, item := range original {
 			id, err := identity(item)
 			if err != nil {
 				return nil, err
 			}
 			if replacement, exists := replacements[id]; exists {
-				if !used[id] {
+				if key != "rules" && !used[id] {
 					out = append(out, replacement)
 					used[id] = true
 				}
@@ -132,25 +140,34 @@ func ComposeSubscription(base string, binding SubscriptionBinding) (map[string]a
 				out = append(out, item)
 			}
 		}
-		additional := []any{}
-		for _, item := range added {
-			id, _ := identity(item)
-			if !used[id] {
-				additional = append(additional, item)
-			}
-		}
 		if key == "rules" {
-			index := len(out)
-			for i, item := range out {
+			if catchAll, exists := replacements["MATCH"]; exists {
+				out = append(out, catchAll)
+			}
+		} else {
+			for _, item := range added {
 				id, _ := identity(item)
-				if id == "MATCH" {
-					index = i
-					break
+				if !used[id] {
+					out = append(out, item)
 				}
 			}
-			out = append(append(append([]any{}, out[:index]...), additional...), out[index:]...)
-		} else {
-			out = append(out, additional...)
+		}
+		if key == "rules" && len(binding.RuleOrder) > 0 {
+			position := make(map[string]int, len(binding.RuleOrder))
+			for i, id := range binding.RuleOrder {
+				position[id] = i
+			}
+			rank := func(rule any) int {
+				id, _ := identity(rule)
+				if id == "MATCH" {
+					return len(binding.RuleOrder) + 1
+				}
+				if i, ok := position[id]; ok {
+					return i
+				}
+				return len(binding.RuleOrder)
+			}
+			slices.SortStableFunc(out, func(a, b any) int { return rank(a) - rank(b) })
 		}
 		config[key] = out
 	}

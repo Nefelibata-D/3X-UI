@@ -77,18 +77,32 @@ export function composeSubscription(base: string, binding: Subscription) {
       throw new Error('覆盖项重复：' + section);
     const replacements = new Map(additions);
     const used = new Set<string>();
-    const result: [string, unknown][] = [];
+    const result = section === 'rules' ? additions.filter(([id]) => id !== 'MATCH') : [];
     for (const [id, value] of entries(config, section)) {
       if (replacements.has(id)) {
-        if (!used.has(id)) {
+        if (section !== 'rules' && !used.has(id)) {
           result.push([id, replacements.get(id)]);
           used.add(id);
         }
       } else if (!binding[disabledField[section]].includes(id)) result.push([id, value]);
     }
-    const added = additions.filter(([id]) => !used.has(id));
-    const match = section === 'rules' ? result.findIndex(([id]) => id === 'MATCH') : -1;
-    result.splice(match < 0 ? result.length : match, 0, ...added);
+    for (const row of additions) {
+      if (section === 'rules' ? row[0] === 'MATCH' : !used.has(row[0])) result.push(row);
+    }
+    const order =
+      section === 'rules'
+        ? binding.ruleOrder
+        : section === 'rule-providers'
+          ? binding.providerOrder
+          : [];
+    if (order?.length) {
+      const positions = new Map(order.map((id, i) => [id, i]));
+      const rank = (id: string) =>
+        section === 'rules' && id === 'MATCH'
+          ? order.length + 1
+          : (positions.get(id) ?? order.length);
+      result.sort(([a], [b]) => rank(a) - rank(b));
+    }
     config = setEntries(config, section, result);
   }
   return stringify(config);
@@ -108,6 +122,8 @@ export function subscriptionFromYAML(
     const inherited = new Map(entries(original, section));
     const explicit = new Set(entries(previous, section).map(([id]) => id));
     const rows = entries(edited, section);
+    if (section === 'rules') next.ruleOrder = rows.map(([id]) => id);
+    if (section === 'rule-providers') next.providerOrder = rows.map(([id]) => id);
     next[disabledField[section]] = [...inherited.keys()].filter(
       (id) => !rows.some(([key]) => key === id),
     );
@@ -116,7 +132,9 @@ export function subscriptionFromYAML(
       section,
       rows.filter(
         ([id, value]) =>
-          explicit.has(id) || !inherited.has(id) || stringify(inherited.get(id)) !== stringify(value),
+          explicit.has(id) ||
+          !inherited.has(id) ||
+          stringify(inherited.get(id)) !== stringify(value),
       ),
     );
   }

@@ -12,6 +12,12 @@ export const subscriptionSchema = z.object({
     .record(z.string(), z.string())
     .nullish()
     .transform((v) => v ?? {}),
+  ruleOrder: strings,
+  providerOrder: strings,
+  pausedContent: z
+    .string()
+    .nullish()
+    .transform((v) => v || '{}'),
   disabledRules: strings,
   disabledProviders: strings,
   disabledGroups: strings,
@@ -27,6 +33,9 @@ export const emptySubscription: Subscription = {
   lastSyncAt: 0,
   templateId: 0,
   dialers: {},
+  ruleOrder: [],
+  providerOrder: [],
+  pausedContent: '{}',
   disabledRules: [],
   disabledProviders: [],
   disabledGroups: [],

@@ -7,6 +7,21 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+export function sameConfigValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const left = Object.entries(a),
+    right = Object.entries(b);
+  return (
+    left.length === right.length &&
+    left.every(
+      ([key, value]) =>
+        Object.hasOwn(b, key) && sameConfigValue(value, (b as Record<string, unknown>)[key]),
+    )
+  );
+}
+
 export function restorePublicationFields(
   edited: Record<string, unknown>,
   source: Record<string, unknown>,
@@ -27,19 +42,8 @@ export function restorePublicationFields(
   const options = object(edited['weighted-sticky']);
   const original = object(source['weighted-sticky']);
   const generated = object(preview['weighted-sticky']);
-  const same = (a: unknown, b: unknown): boolean => {
-    if (a === b) return true;
-    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
-    const left = Object.entries(a),
-      right = Object.entries(b);
-    return (
-      left.length === right.length &&
-      left.every(
-        ([key, value]) => Object.hasOwn(b, key) && same(value, (b as Record<string, unknown>)[key]),
-      )
-    );
-  };
-  if (Object.hasOwn(generated, 'nodes') && !same(options.nodes, generated.nodes))
+
+  if (Object.hasOwn(generated, 'nodes') && !sameConfigValue(options.nodes, generated.nodes))
     throw Error('服务器身份、代理归属和权重由发布器生成，请在节点和负载分配中修改');
   restore(options, original, 'nodes');
   for (const [key, value] of [
@@ -54,7 +58,10 @@ export function restorePublicationFields(
     originalControl = object(originalResilience.control);
   const generatedControl = object(object(generated.resilience).control);
   for (const key of ['base-url', 'uuid']) {
-    if (Object.hasOwn(generatedControl, key) && !same(control[key], generatedControl[key]))
+    if (
+      Object.hasOwn(generatedControl, key) &&
+      !sameConfigValue(control[key], generatedControl[key])
+    )
       throw Error('控制地址和节点身份由官方订阅生成，不能在 YAML 中覆盖');
   }
   for (const key of ['base-url', 'uuid']) restore(control, originalControl, key);

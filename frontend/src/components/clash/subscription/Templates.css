@@ -143,11 +143,14 @@
   width: calc(100% + 16px);
   min-height: 0;
   overflow-y: auto;
+  padding-inline-end: 0;
+}
+.clash-template-controls .ant-tabs-body-holder,
+.subscription-route-scroll {
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--ant-color-text-quaternary) transparent;
-  padding-inline-end: 0;
 }
 .clash-template-controls .ant-tabs-body {
   width: 100cqi;

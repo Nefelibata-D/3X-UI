@@ -13,6 +13,7 @@ export const subscriptionSchema = z.object({
     .nullish()
     .transform((v) => v ?? {}),
   ruleOrder: strings,
+  groupOrder: strings,
   providerOrder: strings,
   pausedContent: z
     .string()
@@ -34,6 +35,7 @@ export const emptySubscription: Subscription = {
   templateId: 0,
   dialers: {},
   ruleOrder: [],
+  groupOrder: [],
   providerOrder: [],
   pausedContent: '{}',
   disabledRules: [],

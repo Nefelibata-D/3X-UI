@@ -152,20 +152,24 @@ func ComposeSubscription(base string, binding SubscriptionBinding) (map[string]a
 				}
 			}
 		}
-		if key == "rules" && len(binding.RuleOrder) > 0 {
-			position := make(map[string]int, len(binding.RuleOrder))
-			for i, id := range binding.RuleOrder {
+		order := binding.RuleOrder
+		if key == "proxy-groups" {
+			order = binding.GroupOrder
+		}
+		if len(order) > 0 {
+			position := make(map[string]int, len(order))
+			for i, id := range order {
 				position[id] = i
 			}
 			rank := func(rule any) int {
 				id, _ := identity(rule)
-				if id == "MATCH" {
-					return len(binding.RuleOrder) + 1
+				if key == "rules" && id == "MATCH" {
+					return len(order) + 1
 				}
 				if i, ok := position[id]; ok {
 					return i
 				}
-				return len(binding.RuleOrder)
+				return len(order)
 			}
 			slices.SortStableFunc(out, func(a, b any) int { return rank(a) - rank(b) })
 		}

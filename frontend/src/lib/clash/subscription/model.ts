@@ -94,7 +94,7 @@ export function composeSubscription(base: string, binding: Subscription) {
         ? binding.ruleOrder
         : section === 'rule-providers'
           ? binding.providerOrder
-          : [];
+          : binding.groupOrder;
     if (order?.length) {
       const positions = new Map(order.map((id, i) => [id, i]));
       const rank = (id: string) =>
@@ -122,6 +122,7 @@ export function subscriptionFromYAML(
     const inherited = new Map(entries(original, section));
     const explicit = new Set(entries(previous, section).map(([id]) => id));
     const rows = entries(edited, section);
+    if (section === 'proxy-groups') next.groupOrder = rows.map(([id])=>id);
     if (section === 'rules') next.ruleOrder = rows.map(([id]) => id);
     if (section === 'rule-providers') next.providerOrder = rows.map(([id]) => id);
     next[disabledField[section]] = [...inherited.keys()].filter(

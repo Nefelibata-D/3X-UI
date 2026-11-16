@@ -20,6 +20,7 @@ type SubscriptionBinding struct {
 	SubID             string                   `json:"-" gorm:"primaryKey"`
 	TemplateID        uint                     `json:"templateId"`
 	RuleOrder         []string                 `json:"ruleOrder" gorm:"serializer:json"`
+	GroupOrder        []string                 `json:"groupOrder" gorm:"serializer:json"`
 	ProviderOrder     []string                 `json:"providerOrder" gorm:"serializer:json"`
 	PausedContent     string                   `json:"pausedContent"`
 	DisabledRules     []string                 `json:"disabledRules" gorm:"serializer:json"`

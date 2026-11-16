@@ -12,35 +12,27 @@ import {
   Alert,
   message,
   Button,
-  Segmented,
+  Checkbox,
   Modal,
   Select,
   Space,
   Spin,
   Tabs,
   Tag,
-  Tooltip,
   Typography,
   Form,
 } from 'antd';
-import { CheckOutlined, CopyOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons';
 import { stringify } from 'yaml';
 import type { ClientRecord } from '@/hooks/useClients';
 import TemplateInsert from '@/components/clash/subscription/TemplateInsert';
-import SubscriptionRoutes from './SubscriptionRoutes';
-import NodeGroups from '@/components/clash/subscription/NodeGroups';
+import SubscriptionEntries from './SubscriptionEntries';
 import TemplateWorkspace from '@/components/clash/subscription/TemplateWorkspace';
-import LoadBalance from '@/components/clash/subscription/LoadBalance';
-import { weightedGroupIssue } from '@/lib/clash/subscription/loadBalance';
 import { deleteSubscriptionGroup } from '@/lib/clash/subscription/deletion';
 import { validateTemplate } from '@/lib/clash/subscription/template/validation';
 import {
   composeSubscription,
-  disabledField,
   documentObject,
   entries,
-  setEntries,
-  ruleIdentity,
   subscriptionFromYAML,
   type Section,
 } from '@/lib/clash/subscription/model';
@@ -94,7 +86,8 @@ function SubscriptionEditor({
   const [saving, setSaving] = useState(false);
   const [chainValid, setChainValid] = useState(true);
   const [activeTab, setActiveTab] = useState('subscription');
-  const [source, setSource] = useState<'template' | 'custom'>('template');
+  const [showTemplate, setShowTemplate] = useState(true);
+  const [showCustom, setShowCustom] = useState(true);
   const [yamlDraft, setYamlDraft] = useState<string>();
   const [yamlError, setYamlError] = useState('');
   const changeBinding: typeof form.setValue = (...args) => {
@@ -105,8 +98,6 @@ function SubscriptionEditor({
   const [error, setError] = useState('');
   const saveMutation = useSaveClashSubscription(client.id);
   const template = data.templates.find((item) => item.id === draft.templateId);
-  const overlay = documentObject(draft.content);
-  const base = documentObject(template?.content ?? '{}');
   let composed = '{}',
     compositionError = '';
   try {
@@ -186,33 +177,6 @@ function SubscriptionEditor({
   } catch (e) {
     publicationError = String(e);
   }
-  const customGroups = entries(overlay, 'proxy-groups').map(([name, value]) => ({
-    name,
-    type: String((value as Record<string, unknown>).type),
-  }));
-
-  function changeSection(section: Section, content: string) {
-    try {
-      const updated = documentObject(content);
-      const next = setEntries(overlay, section, entries(updated, section));
-      const remaining = new Set(entries(updated, section).map(([id]) => id));
-      const restored = new Set(
-        entries(overlay, section)
-          .filter(([id]) => !remaining.has(id))
-          .map(([id]) => id),
-      );
-      const field = disabledField[section];
-      changeBinding(
-        field,
-        draft[field].filter((id) => !restored.has(id)),
-        { shouldDirty: true },
-      );
-      changeBinding('content', stringify(next), { shouldDirty: true });
-      setError('');
-    } catch (e) {
-      setError(String(e));
-    }
-  }
   function removeGroup(name: string) {
     try {
       const current = form.getValues();
@@ -255,189 +219,24 @@ function SubscriptionEditor({
       void message.error(String(e));
     }
   }
-  function inherit(section: Section, balance = false) {
-    const rows = entries(base, section).filter(
-      ([, value]) => !balance || (value as Record<string, unknown>).type === 'load-balance',
-    );
-    const custom = new Set(entries(overlay, section).map(([id]) => id));
-    const field = disabledField[section];
-    const identity = (name: string) => (section === 'rules' ? ruleIdentity(name) : name);
-    const entryClassName = (name: string) =>
-      'subscription-inherited-item ' +
-      (custom.has(identity(name))
-        ? 'subscription-inherited-overridden'
-        : draft[field].includes(identity(name))
-          ? 'subscription-inherited-disabled'
-          : '');
-    const toggleBalance = (name: string) => {
-      const current = entries(combined, 'proxy-groups').find(([id]) => id === name)?.[1] as
-        Record<string, unknown> | undefined;
-      const inherited = rows.find(([id]) => id === name)?.[1] as Record<string, unknown>;
-      const enabled = current?.type === 'load-balance';
-      const group = { ...(current ?? inherited) };
-      const blacklists = Array.isArray(combined['site-blacklist'])
-        ? (combined['site-blacklist'] as Record<string, unknown>[])
-        : [];
-      let nextRules = blacklists.filter((entry) => entry.group !== name);
-      if (enabled || !current) {
-        group.type = 'select';
-        delete group.strategy;
-        delete group['weighted-sticky'];
-      } else {
-        group.type = 'load-balance';
-        for (const field of ['strategy', 'weighted-sticky'])
-          if (field in inherited) group[field] = inherited[field];
-        const originalRules = Array.isArray(base['site-blacklist'])
-          ? (base['site-blacklist'] as Record<string, unknown>[])
-          : [];
-        nextRules = [...nextRules, ...originalRules.filter((entry) => entry.group === name)];
-      }
-      const next = setEntries(overlay, 'proxy-groups', [
-        ...entries(overlay, 'proxy-groups').filter(([id]) => id !== name),
-        [name, group],
-      ]);
-      next['site-blacklist'] = nextRules;
-      changeBinding('content', stringify(next), { shouldDirty: true });
-      changeBinding(
-        'disabledGroups',
-        draft.disabledGroups.filter((id) => id !== name),
-        { shouldDirty: true },
-      );
-      setError('');
-    };
-    const entryActions = (name: string) => {
-      const id = identity(name),
-        disabled = draft[field].includes(id),
-        overridden = custom.has(id);
-      const balanceIssue =
-        balance &&
-        (
-          entries(combined, 'proxy-groups').find(([key]) => key === id)?.[1] as
-            Record<string, unknown> | undefined
-        )?.type !== 'load-balance' &&
-        (rows.find(([key]) => key === id)?.[1] as Record<string, unknown> | undefined)?.strategy ===
-          'weighted-sticky'
-          ? weightedGroupIssue(
-              injectedMembers[id] ?? [],
-              groupRows.map((group) => group.name),
-              data.proxies.map((proxy) => proxy.name),
-            )
-          : '';
-      return (
-        <Space size={0} className="subscription-entry-actions">
-          {balance ? (
-            <Tooltip title={balanceIssue}>
-              <span>
-                <Button
-                  disabled={!!balanceIssue}
-                  size="small"
-                  type="text"
-                  aria-label={
-                    (
-                      entries(combined, 'proxy-groups').find(([key]) => key === id)?.[1] as
-                        Record<string, unknown> | undefined
-                    )?.type === 'load-balance'
-                      ? '关闭负载均衡'
-                      : '开启负载均衡'
-                  }
-                  title="切换负载均衡，保留代理组"
-                  icon={<StopOutlined aria-hidden />}
-                  onClick={() => toggleBalance(id)}
-                />
-              </span>
-            </Tooltip>
-          ) : (
-            <Button
-              size="small"
-              type="text"
-              danger={!disabled && !overridden}
-              disabled={overridden}
-              title={overridden ? '已覆盖' : disabled ? '恢复继承' : '禁用'}
-              aria-label={overridden ? '已覆盖' : disabled ? '恢复继承' : '禁用'}
-              icon={
-                overridden ? (
-                  <CheckOutlined aria-hidden />
-                ) : disabled ? (
-                  <UndoOutlined aria-hidden />
-                ) : (
-                  <StopOutlined aria-hidden />
-                )
-              }
-              onClick={() =>
-                changeBinding(
-                  field,
-                  disabled ? draft[field].filter((key) => key !== id) : [...draft[field], id],
-                  { shouldDirty: true },
-                )
-              }
-            />
-          )}
-          <Button
-            size="small"
-            type="text"
-            icon={<CopyOutlined aria-hidden />}
-            title="复制到自定义编辑"
-            aria-label="覆盖"
-            disabled={overridden}
-            onClick={() => {
-              setSource('custom');
-              const value = rows.find(([key]) => key === id)?.[1];
-              changeBinding(
-                'content',
-                stringify(
-                  setEntries(overlay, section, [...entries(overlay, section), [id, value]]),
-                ),
-                { shouldDirty: true },
-              );
-            }}
-          />
-        </Space>
-      );
-    };
-    const inheritedContent = stringify(setEntries(base, section, rows));
-    const common = {
-      content: inheritedContent,
-      readonly: true,
-      entryActions,
-      entryClassName,
-    };
-    return section === 'proxy-groups' ? (
-      balance ? (
-        <LoadBalance {...common} rules={data.rules} onChange={() => {}} />
-      ) : (
-        <NodeGroups
-          {...common}
-          effectiveContent={memberContent}
-          groups={rows.map(([name, value]) => ({
-            name,
-            type: String((value as Record<string, unknown>).type),
-          }))}
-          bindings={[]}
-          invalid={false}
-          change={() => {}}
-        />
-      )
-    ) : (
-      <TemplateInsert
-        {...common}
-        tab={section === 'rules' ? 'routes' : 'providers'}
-        groups={groupRows.map((g) => g.name)}
-        rules={data.rules}
-        onChange={() => {}}
-      />
-    );
-  }
-
-  function routeEditor(section: 'rules' | 'rule-providers') {
+  function entryEditor(section: Section, balance = false) {
     return (
-      <SubscriptionRoutes
-        key={section}
+      <SubscriptionEntries
+        key={balance ? 'balance' : section}
         section={section}
+        balance={balance}
         base={template?.content ?? '{}'}
         binding={draft}
         combined={combined}
-        groups={groupRows.map((g) => g.name)}
+        groups={groupRows}
         rules={data.rules}
+        inbounds={data.inbounds}
+        memberContent={memberContent}
+        availableNodes={injectedMembers}
+        managedProxyNames={data.proxies.map((p) => p.name)}
+        onRemove={removeGroup}
+        showTemplate={showTemplate}
+        showCustom={showCustom}
         change={(next) => {
           setYamlDraft(undefined);
           setYamlError('');
@@ -490,7 +289,8 @@ function SubscriptionEditor({
           onChange={(templateId) => {
             setYamlDraft(undefined);
             setYamlError('');
-            setSource('template');
+            setShowTemplate(true);
+            setShowCustom(true);
             form.reset({ ...emptySubscription, templateId });
           }}
         />
@@ -586,73 +386,25 @@ function SubscriptionEditor({
               key: 'groups',
               label: '代理组',
               disabled: !template,
-              children:
-                source === 'template' ? (
-                  inherit('proxy-groups')
-                ) : (
-                  <>
-                    <NodeGroups
-                      content={draft.content}
-                      referenceContent={composed}
-                      effectiveContent={memberContent}
-                      entryClassName={() => 'subscription-node-card'}
-                      onRemove={removeGroup}
-                      groups={customGroups}
-                      bindings={draft.groups}
-                      inboundOptions={data.inbounds}
-                      readonly={false}
-                      invalid={!!compositionError}
-                      change={(content, bindings) => {
-                        changeSection('proxy-groups', content);
-                        changeBinding('groups', bindings, {
-                          shouldDirty: true,
-                        });
-                      }}
-                    />
-                  </>
-                ),
+              children: entryEditor('proxy-groups'),
             },
             {
               key: 'providers',
               label: '规则集',
               disabled: !template,
-              children: routeEditor('rule-providers'),
+              children: entryEditor('rule-providers'),
             },
             {
               key: 'routes',
               label: '路由',
               disabled: !template,
-              children: routeEditor('rules'),
+              children: entryEditor('rules'),
             },
             {
               key: 'load-balance',
               label: '负载均衡',
               disabled: !template,
-              children:
-                source === 'template' ? (
-                  inherit('proxy-groups', true)
-                ) : (
-                  <>
-                    <LoadBalance
-                      visibleGroups={customGroups.map((g) => g.name)}
-                      availableNodes={injectedMembers}
-                      managedProxyNames={data.proxies.map((proxy) => proxy.name)}
-                      content={composed}
-                      readonly={false}
-                      rules={data.rules}
-                      onChange={(content) => {
-                        const next = subscriptionFromYAML(
-                          template?.content ?? '{}',
-                          content,
-                          draft,
-                        );
-                        changeBinding('content', next.content, {
-                          shouldDirty: true,
-                        });
-                      }}
-                    />
-                  </>
-                ),
+              children: entryEditor('proxy-groups', true),
             },
             {
               key: 'dialer',
@@ -693,18 +445,18 @@ function SubscriptionEditor({
             },
           ]}
         />
-        {template && ['groups', 'load-balance'].includes(activeTab) && (
-          <div className="subscription-source-toggle">
-            <Segmented<'template' | 'custom'>
-              size="small"
-              aria-label="配置来源"
-              value={source}
-              onChange={setSource}
-              options={[
-                { label: '模板', value: 'template' },
-                { label: '自定义', value: 'custom' },
-              ]}
-            />
+        {template && ['groups', 'providers', 'routes', 'load-balance'].includes(activeTab) && (
+          <div
+            className="subscription-source-toggle subscription-route-filters"
+            role="group"
+            aria-label="配置来源"
+          >
+            <Checkbox checked={showTemplate} onChange={(e) => setShowTemplate(e.target.checked)}>
+              模板
+            </Checkbox>
+            <Checkbox checked={showCustom} onChange={(e) => setShowCustom(e.target.checked)}>
+              自定义
+            </Checkbox>
           </div>
         )}
       </TemplateWorkspace>

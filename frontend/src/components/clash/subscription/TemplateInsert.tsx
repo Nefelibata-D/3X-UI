@@ -10,6 +10,8 @@ import { DeleteOutlined, StopOutlined, EditOutlined, PlusOutlined } from '@ant-d
 import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 
 interface Props {
+  rowActions?: (name: string) => ReactNode;
+  beforeAdd?: ReactNode;
   visible?: (name: string) => boolean;
   onDisable?: (name: string) => void;
   entryActions?: (name: string) => ReactNode;
@@ -271,28 +273,32 @@ export default function TemplateInsert(props: Props) {
                     disabled={!!editing || !!doc.errors.length}
                     onClick={() => setEditing({ entry, original: content })}
                   />
-                  <Button
-                    type="text"
-                    danger
-                    title={props.onDisable ? '禁用' : '移除'}
-                    aria-label={(props.onDisable ? '禁用 ' : '移除 ') + title}
-                    icon={
-                      props.onDisable ? (
-                        <StopOutlined aria-hidden />
-                      ) : (
-                        <DeleteOutlined aria-hidden />
-                      )
-                    }
-                    disabled={!!editing || !!doc.errors.length}
-                    onClick={() => {
-                      if (props.onDisable) {
-                        props.onDisable(title);
-                        return;
+                  {props.rowActions ? (
+                    props.rowActions(title)
+                  ) : (
+                    <Button
+                      type="text"
+                      danger
+                      title={props.onDisable ? '禁用' : '移除'}
+                      aria-label={(props.onDisable ? '禁用 ' : '移除 ') + title}
+                      icon={
+                        props.onDisable ? (
+                          <StopOutlined aria-hidden />
+                        ) : (
+                          <DeleteOutlined aria-hidden />
+                        )
                       }
-                      doc.deleteIn([collection, entry]);
-                      onChange(doc.toString());
-                    }}
-                  />
+                      disabled={!!editing || !!doc.errors.length}
+                      onClick={() => {
+                        if (props.onDisable) {
+                          props.onDisable(title);
+                          return;
+                        }
+                        doc.deleteIn([collection, entry]);
+                        onChange(doc.toString());
+                      }}
+                    />
+                  )}
                 </Space>
               )}
               {props.entryActions?.(title)}
@@ -307,6 +313,7 @@ export default function TemplateInsert(props: Props) {
           action={<Button onClick={() => setEditing(undefined)}>关闭</Button>}
         />
       )}
+      {props.beforeAdd}
       {editing && editing.entry === undefined && editor}
       {!readonly && !editing && (
         <Button

@@ -12,6 +12,9 @@ import {
 } from '@/lib/clash/subscription/loadBalance';
 
 interface Props {
+  rowActions?: (name: string) => ReactNode;
+  beforeAdd?: ReactNode;
+  onDisable?: (name: string) => void;
   visibleGroups?: string[];
   entryActions?: (name: string) => ReactNode;
   entryClassName?: (name: string) => string;
@@ -25,18 +28,13 @@ interface Props {
 export default function LoadBalance(props: Props) {
   const [editing, setEditing] = useState<{ original: string; content: string; group?: string }>();
   const [pendingRule, setPendingRule] = useState(false);
-  if (!editing)
-    return (
-      <BalanceContent
-        {...props}
-        onEdit={(group) => {
-          setPendingRule(false);
-          setEditing({ original: props.content, content: props.content, group });
-        }}
-      />
-    );
+  function open(group?: string) {
+    setPendingRule(false);
+    setEditing({ original: props.content, content: props.content, group });
+  }
+  if (!editing) return <BalanceContent {...props} onEdit={open} />;
   const stale = editing.original !== props.content;
-  return (
+  const editor = (
     <div className="template-entry-edit template-balance-editor">
       {stale && <Alert type="warning" title="基础 YAML 已变更，请取消后重新编辑。" />}
       <BalanceContent
@@ -71,6 +69,8 @@ export default function LoadBalance(props: Props) {
       )}
     </div>
   );
+  if (!props.onDisable) return editor;
+  return <BalanceContent {...props} inlineEditor={{ name: editing.group, form: editor }} />;
 }
 function BalanceContent({
   content,
@@ -79,14 +79,19 @@ function BalanceContent({
   rules,
   editing = false,
   initialGroup,
+  inlineEditor,
   availableNodes,
   managedProxyNames,
   visibleGroups,
+  rowActions,
+  beforeAdd,
+  onDisable,
   onEdit,
   onPendingRule,
   entryActions,
   entryClassName,
 }: Props & {
+  inlineEditor?: { name?: string; form: ReactNode };
   editing?: boolean;
   initialGroup?: string;
   onEdit?: (group?: string) => void;
@@ -301,259 +306,272 @@ function BalanceContent({
             g.type === 'load-balance' &&
             (editing ? selected === g.name : !visibleGroups || visibleGroups.includes(g.name)),
         )
-        .map((g) => (
-          <div
-            key={g.name}
-            className={[
-              editing ? '' : 'template-route-card template-balance-card',
-              entryClassName?.(g.name),
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            {!editing && (
-              <div className="template-balance-heading">
-                <div>
-                  <div className="template-entry-title">{g.name}</div>
-                  {selected !== g.name && (
-                    <Space style={{ marginTop: 8 }}>
-                      <Tag color="purple">黑名单 {ruleRows(g.name).length} 条</Tag>
-                      <Tag color="blue">{g.strategy || 'consistent-hashing'}</Tag>
-                    </Space>
-                  )}
-                </div>
-                <Space size={4}>
-                  {readonly && (
-                    <Button
-                      type="text"
-                      aria-label={'查看 ' + g.name}
-                      title={expanded.has(g.name) ? '收起黑名单规则' : '查看黑名单规则'}
-                      aria-expanded={expanded.has(g.name)}
-                      aria-controls={`${uid}-blacklist-${g.index}`}
-                      className={expanded.has(g.name) ? 'template-edit-active' : undefined}
-                      icon={<EyeOutlined aria-hidden />}
-                      onClick={() =>
-                        setExpanded((current) => {
-                          const next = new Set(current);
-                          if (next.has(g.name)) next.delete(g.name);
-                          else next.add(g.name);
-                          return next;
-                        })
-                      }
-                    />
-                  )}
-                  {!readonly && (
-                    <Space size={4}>
-                      <Button
-                        type="text"
-                        aria-label={'设置 ' + g.name}
-                        className={selected === g.name ? 'template-edit-active' : undefined}
-                        aria-pressed={selected === g.name}
-                        icon={<EditOutlined aria-hidden />}
-                        onClick={() => {
-                          onEdit?.(g.name);
-                        }}
-                      />
-                      <Button
-                        type="text"
-                        danger
-                        aria-label={'移除负载均衡 ' + g.name}
-                        icon={<DeleteOutlined aria-hidden />}
-                        onClick={() => removeGroup(g.name)}
-                      />
-                    </Space>
-                  )}
-                  {entryActions?.(g.name)}
-                </Space>
-              </div>
-            )}
-            {(editing || (readonly && expanded.has(g.name))) && (
-              <div className="template-balance-rules" id={`${uid}-blacklist-${g.index}`}>
-                {!readonly && (
-                  <Space orientation="vertical" style={{ width: '100%' }}>
-                    <label htmlFor={uid + '-group'}>节点组</label>
-                    <Select
-                      id={uid + '-group'}
-                      aria-label="更换负载均衡节点组"
-                      style={{ width: '100%' }}
-                      value={g.name}
-                      options={groups
-                        .filter((item) => item.name === g.name || item.type !== 'load-balance')
-                        .map((item) => groupOption(item.name, g.strategy === 'weighted-sticky'))}
-                      optionRender={(option) => optionLabel(option.label, option.data.reason)}
-                      onChange={(name) => changeGroup(g.name, name)}
-                    />
-                    <label htmlFor={uid + '-strategy'}>负载均衡类型</label>
-                    <Select
-                      id={uid + '-strategy'}
-                      aria-label="负载均衡类型"
-                      style={{ width: '100%' }}
-                      value={g.strategy || 'consistent-hashing'}
-                      options={[
-                        'consistent-hashing',
-                        'round-robin',
-                        'sticky-sessions',
-                        'weighted-sticky',
-                      ].map((value) => ({
-                        value,
-                        label: value,
-                        disabled: value === 'weighted-sticky' && !!weightedIssue(g.name),
-                        reason: value === 'weighted-sticky' ? weightedIssue(g.name) : '',
-                      }))}
-                      optionRender={(option) => optionLabel(option.label, option.data.reason)}
-                      onChange={(value) => {
-                        if (value === 'weighted-sticky' && weightedIssue(g.name)) return;
-                        doc.setIn(['proxy-groups', g.index, 'strategy'], value);
-                        if (value !== 'weighted-sticky')
-                          doc.deleteIn(['proxy-groups', g.index, 'weighted-sticky']);
-                        commit();
-                      }}
-                    />
-                  </Space>
-                )}
-
-                {g.strategy !== 'weighted-sticky' && (
-                  <Alert
-                    type="warning"
-                    title="黑名单需要 weighted-sticky 策略"
-                    action={
-                      !readonly && (
-                        <Tooltip title={weightedIssue(g.name)}>
-                          <span>
-                            <Button
-                              disabled={!!weightedIssue(g.name)}
-                              onClick={() => {
-                                doc.setIn(['proxy-groups', g.index, 'strategy'], 'weighted-sticky');
-                                commit();
-                              }}
-                            >
-                              使用加权负载均衡
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      )
-                    }
-                  />
-                )}
-                <strong>黑名单规则</strong>
-                {ruleRows(g.name).map((e) => (
-                  <div className="template-route-card template-blacklist-row" key={e.rule}>
-                    <div className="template-blacklist-fields">
-                      <div className="template-blacklist-field">
-                        <span className="template-blacklist-label">路由规则</span>
-                        <div className="template-blacklist-value">
-                          <Tag color="blue">{e.rule.slice(0, e.rule.indexOf(','))}</Tag>
-                          <span>{e.rule.slice(e.rule.indexOf(',') + 1)}</span>
-                        </div>
-                      </div>
-                      <div className="template-blacklist-field">
-                        <span className="template-blacklist-label">匹配节点</span>
-                        <div className="template-blacklist-value">
-                          {e.proxies.map((proxy) => (
-                            <Tag color="purple" key={proxy}>
-                              {proxy || '待发布时配置'}
-                            </Tag>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    {!readonly && (
-                      <Space size={0}>
-                        <Button
-                          type="text"
-                          aria-label="编辑黑名单"
-                          icon={<EditOutlined aria-hidden />}
-                          onClick={() =>
-                            setDraft({
-                              proxies: e.proxies.filter(Boolean),
-                              kind: e.rule.slice(0, e.rule.indexOf(',')),
-                              value: e.rule.slice(e.rule.indexOf(',') + 1),
-                              original: e.rule,
-                            })
-                          }
-                        />
-                        <Button
-                          type="text"
-                          danger
-                          aria-label="删除黑名单"
-                          icon={<DeleteOutlined aria-hidden />}
-                          onClick={() => deleteRule(g.name, e.rule)}
-                        />
+        .map((g) =>
+          inlineEditor?.name === g.name ? (
+            <div key={g.name}>{inlineEditor.form}</div>
+          ) : (
+            <div
+              key={g.name}
+              className={[
+                editing ? '' : 'template-route-card template-balance-card',
+                entryClassName?.(g.name),
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {!editing && (
+                <div className="template-balance-heading">
+                  <div>
+                    <div className="template-entry-title">{g.name}</div>
+                    {selected !== g.name && (
+                      <Space style={{ marginTop: 8 }}>
+                        <Tag color="purple">黑名单 {ruleRows(g.name).length} 条</Tag>
+                        <Tag color="blue">{g.strategy || 'consistent-hashing'}</Tag>
                       </Space>
                     )}
                   </div>
-                ))}
-                {selected === g.name && draft && !readonly && (
-                  <Space
-                    className="template-blacklist-form"
-                    orientation="vertical"
-                    style={{ width: '100%' }}
-                  >
-                    <Select
-                      aria-label="黑名单避开节点"
-                      placeholder="选择避开的代理节点（模板可留空）"
-                      style={{ width: '100%' }}
-                      mode="multiple"
-                      value={draft.proxies}
-                      options={(availableNodes?.[g.name] ?? g.effective).map((value) => ({
-                        value,
-                      }))}
-                      onChange={(proxies: string[]) => {
-                        setDraft({ ...draft, proxies });
-                      }}
-                    />
-                    <Select
-                      aria-label="黑名单规则类型"
-                      style={{ width: '100%' }}
-                      value={draft.kind}
-                      options={['RULE-SET', ...blacklistRuleKinds].map((value) => ({ value }))}
-                      onChange={(kind) => setDraft({ ...draft, kind, value: '' })}
-                    />
-                    {draft.kind === 'RULE-SET' ? (
-                      <Select
-                        aria-label="黑名单规则集"
-                        showSearch
-                        style={{ width: '100%' }}
-                        placeholder="选择规则集"
-                        value={draft.value || undefined}
-                        options={names.map((value) => ({ value }))}
-                        onChange={(value) => setDraft({ ...draft, value })}
-                      />
-                    ) : (
-                      <Input
-                        aria-label="黑名单规则内容"
-                        placeholder={
-                          draft.kind === 'DOMAIN-REGEX' ? '域名正则表达式' : 'example.com'
+                  <Space size={4}>
+                    {readonly && (
+                      <Button
+                        type="text"
+                        aria-label={'查看 ' + g.name}
+                        title={expanded.has(g.name) ? '收起黑名单规则' : '查看黑名单规则'}
+                        aria-expanded={expanded.has(g.name)}
+                        aria-controls={`${uid}-blacklist-${g.index}`}
+                        className={expanded.has(g.name) ? 'template-edit-active' : undefined}
+                        icon={<EyeOutlined aria-hidden />}
+                        onClick={() =>
+                          setExpanded((current) => {
+                            const next = new Set(current);
+                            if (next.has(g.name)) next.delete(g.name);
+                            else next.add(g.name);
+                            return next;
+                          })
                         }
-                        value={draft.value}
-                        onChange={(e) => setDraft({ ...draft, value: e.target.value })}
                       />
                     )}
-                    <Space>
-                      <Button onClick={() => setDraft(undefined)}>取消</Button>
-                      <Button type="primary" onClick={addRule}>
-                        确认
-                      </Button>
-                    </Space>
+                    {!readonly && (
+                      <Space size={4}>
+                        <Button
+                          type="text"
+                          disabled={!!inlineEditor}
+                          aria-label={'设置 ' + g.name}
+                          className={selected === g.name ? 'template-edit-active' : undefined}
+                          aria-pressed={selected === g.name}
+                          icon={<EditOutlined aria-hidden />}
+                          onClick={() => {
+                            onEdit?.(g.name);
+                          }}
+                        />
+                        {rowActions ? (
+                          rowActions(g.name)
+                        ) : (
+                          <Button
+                            type="text"
+                            danger
+                            disabled={!!inlineEditor}
+                            aria-label={(onDisable ? '禁用负载均衡 ' : '移除负载均衡 ') + g.name}
+                            icon={<DeleteOutlined aria-hidden />}
+                            onClick={() => (onDisable ? onDisable(g.name) : removeGroup(g.name))}
+                          />
+                        )}
+                      </Space>
+                    )}
+                    {entryActions?.(g.name)}
                   </Space>
-                )}
-                {!readonly && !draft && (
-                  <Button
-                    block
-                    icon={<PlusOutlined aria-hidden />}
-                    disabled={g.strategy !== 'weighted-sticky'}
-                    onClick={() => {
-                      select(g.name);
-                      setDraft({ proxies: [], kind: 'RULE-SET', value: '' });
-                    }}
-                  >
-                    添加黑名单规则
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+                </div>
+              )}
+              {(editing || (readonly && expanded.has(g.name))) && (
+                <div className="template-balance-rules" id={`${uid}-blacklist-${g.index}`}>
+                  {!readonly && (
+                    <Space orientation="vertical" style={{ width: '100%' }}>
+                      <label htmlFor={uid + '-group'}>节点组</label>
+                      <Select
+                        id={uid + '-group'}
+                        aria-label="更换负载均衡节点组"
+                        style={{ width: '100%' }}
+                        value={g.name}
+                        options={groups
+                          .filter((item) => item.name === g.name || item.type !== 'load-balance')
+                          .map((item) => groupOption(item.name, g.strategy === 'weighted-sticky'))}
+                        optionRender={(option) => optionLabel(option.label, option.data.reason)}
+                        onChange={(name) => changeGroup(g.name, name)}
+                      />
+                      <label htmlFor={uid + '-strategy'}>负载均衡类型</label>
+                      <Select
+                        id={uid + '-strategy'}
+                        aria-label="负载均衡类型"
+                        style={{ width: '100%' }}
+                        value={g.strategy || 'consistent-hashing'}
+                        options={[
+                          'consistent-hashing',
+                          'round-robin',
+                          'sticky-sessions',
+                          'weighted-sticky',
+                        ].map((value) => ({
+                          value,
+                          label: value,
+                          disabled: value === 'weighted-sticky' && !!weightedIssue(g.name),
+                          reason: value === 'weighted-sticky' ? weightedIssue(g.name) : '',
+                        }))}
+                        optionRender={(option) => optionLabel(option.label, option.data.reason)}
+                        onChange={(value) => {
+                          if (value === 'weighted-sticky' && weightedIssue(g.name)) return;
+                          doc.setIn(['proxy-groups', g.index, 'strategy'], value);
+                          if (value !== 'weighted-sticky')
+                            doc.deleteIn(['proxy-groups', g.index, 'weighted-sticky']);
+                          commit();
+                        }}
+                      />
+                    </Space>
+                  )}
+
+                  {g.strategy !== 'weighted-sticky' && (
+                    <Alert
+                      type="warning"
+                      title="黑名单需要 weighted-sticky 策略"
+                      action={
+                        !readonly && (
+                          <Tooltip title={weightedIssue(g.name)}>
+                            <span>
+                              <Button
+                                disabled={!!weightedIssue(g.name)}
+                                onClick={() => {
+                                  doc.setIn(
+                                    ['proxy-groups', g.index, 'strategy'],
+                                    'weighted-sticky',
+                                  );
+                                  commit();
+                                }}
+                              >
+                                使用加权负载均衡
+                              </Button>
+                            </span>
+                          </Tooltip>
+                        )
+                      }
+                    />
+                  )}
+                  <strong>黑名单规则</strong>
+                  {ruleRows(g.name).map((e) => (
+                    <div className="template-route-card template-blacklist-row" key={e.rule}>
+                      <div className="template-blacklist-fields">
+                        <div className="template-blacklist-field">
+                          <span className="template-blacklist-label">路由规则</span>
+                          <div className="template-blacklist-value">
+                            <Tag color="blue">{e.rule.slice(0, e.rule.indexOf(','))}</Tag>
+                            <span>{e.rule.slice(e.rule.indexOf(',') + 1)}</span>
+                          </div>
+                        </div>
+                        <div className="template-blacklist-field">
+                          <span className="template-blacklist-label">匹配节点</span>
+                          <div className="template-blacklist-value">
+                            {e.proxies.map((proxy) => (
+                              <Tag color="purple" key={proxy}>
+                                {proxy || '待发布时配置'}
+                              </Tag>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {!readonly && (
+                        <Space size={0}>
+                          <Button
+                            type="text"
+                            aria-label="编辑黑名单"
+                            icon={<EditOutlined aria-hidden />}
+                            onClick={() =>
+                              setDraft({
+                                proxies: e.proxies.filter(Boolean),
+                                kind: e.rule.slice(0, e.rule.indexOf(',')),
+                                value: e.rule.slice(e.rule.indexOf(',') + 1),
+                                original: e.rule,
+                              })
+                            }
+                          />
+                          <Button
+                            type="text"
+                            danger
+                            aria-label="删除黑名单"
+                            icon={<DeleteOutlined aria-hidden />}
+                            onClick={() => deleteRule(g.name, e.rule)}
+                          />
+                        </Space>
+                      )}
+                    </div>
+                  ))}
+                  {selected === g.name && draft && !readonly && (
+                    <Space
+                      className="template-blacklist-form"
+                      orientation="vertical"
+                      style={{ width: '100%' }}
+                    >
+                      <Select
+                        aria-label="黑名单避开节点"
+                        placeholder="选择避开的代理节点（模板可留空）"
+                        style={{ width: '100%' }}
+                        mode="multiple"
+                        value={draft.proxies}
+                        options={(availableNodes?.[g.name] ?? g.effective).map((value) => ({
+                          value,
+                        }))}
+                        onChange={(proxies: string[]) => {
+                          setDraft({ ...draft, proxies });
+                        }}
+                      />
+                      <Select
+                        aria-label="黑名单规则类型"
+                        style={{ width: '100%' }}
+                        value={draft.kind}
+                        options={['RULE-SET', ...blacklistRuleKinds].map((value) => ({ value }))}
+                        onChange={(kind) => setDraft({ ...draft, kind, value: '' })}
+                      />
+                      {draft.kind === 'RULE-SET' ? (
+                        <Select
+                          aria-label="黑名单规则集"
+                          showSearch
+                          style={{ width: '100%' }}
+                          placeholder="选择规则集"
+                          value={draft.value || undefined}
+                          options={names.map((value) => ({ value }))}
+                          onChange={(value) => setDraft({ ...draft, value })}
+                        />
+                      ) : (
+                        <Input
+                          aria-label="黑名单规则内容"
+                          placeholder={
+                            draft.kind === 'DOMAIN-REGEX' ? '域名正则表达式' : 'example.com'
+                          }
+                          value={draft.value}
+                          onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+                        />
+                      )}
+                      <Space>
+                        <Button onClick={() => setDraft(undefined)}>取消</Button>
+                        <Button type="primary" onClick={addRule}>
+                          确认
+                        </Button>
+                      </Space>
+                    </Space>
+                  )}
+                  {!readonly && !draft && (
+                    <Button
+                      block
+                      icon={<PlusOutlined aria-hidden />}
+                      disabled={g.strategy !== 'weighted-sticky'}
+                      onClick={() => {
+                        select(g.name);
+                        setDraft({ proxies: [], kind: 'RULE-SET', value: '' });
+                      }}
+                    >
+                      添加黑名单规则
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          ),
+        )}
       {adding && !readonly && (
         <Space orientation="vertical" style={{ width: '100%' }}>
           <label htmlFor={uid + '-group'}>节点组</label>
@@ -587,11 +605,13 @@ function BalanceContent({
           </Button>
         </Space>
       )}
-      {!readonly && !editing && (
+      {!editing && beforeAdd}
+      {inlineEditor && !inlineEditor.name && inlineEditor.form}
+      {!readonly && !editing && !inlineEditor && (
         <Button
           className="template-entry-add"
           icon={<PlusOutlined aria-hidden />}
-          disabled={!!doc.errors.length}
+          disabled={!!doc.errors.length || !!inlineEditor}
           onClick={() => onEdit?.()}
         >
           添加负载均衡

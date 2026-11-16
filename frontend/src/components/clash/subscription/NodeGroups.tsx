@@ -19,6 +19,9 @@ import {
 } from '@/lib/clash/subscription/template/symbols';
 type Binding = { group: string; allNodes: boolean; nodes: string[] };
 interface Props {
+  rowActions?: (name: string) => ReactNode;
+  beforeAdd?: ReactNode;
+  visible?: (name: string) => boolean;
   inboundOptions?: { inboundKey: string; name: string; hostOverride: boolean }[];
   onRemove?: (name: string) => void;
   entryActions?: (name: string) => ReactNode;
@@ -45,6 +48,9 @@ export default function NodeGroups({
   entryClassName,
   onRemove,
   inboundOptions,
+  visible,
+  rowActions,
+  beforeAdd,
 }: Props) {
   const uid = useId();
   const [editError, setEditError] = useState('');
@@ -308,58 +314,69 @@ export default function NodeGroups({
     <SortableTemplateList
       content={content}
       collection="proxy-groups"
+      indices={visible ? groups.flatMap((g, i) => (visible(g.name) ? [i] : [])) : undefined}
       enabled={!readonly && !draft && !invalid}
       onChange={(value) => change(value, bindings)}
     >
-      {groups.map((group) => {
-        return (
-          <div
-            key={group.name}
-            data-sort-item
-            className={draft?.key === group.name ? undefined : entryClassName?.(group.name)}
-          >
-            {draft?.key === group.name ? (
-              editor
-            ) : (
-              <SortableTemplateRow showHandle={!readonly} enabled={!readonly && !draft && !invalid}>
-                <div className="node-group-summary">
-                  <div className="node-group-heading">
-                    <span className="template-entry-title" title={group.name}>
-                      {group.name}
-                    </span>
-                    <Tag color="blue">{group.type.toUpperCase()}</Tag>
+      {groups
+        .filter((g) => !visible || visible(g.name))
+        .map((group) => {
+          return (
+            <div
+              key={group.name}
+              data-sort-item
+              className={draft?.key === group.name ? undefined : entryClassName?.(group.name)}
+            >
+              {draft?.key === group.name ? (
+                editor
+              ) : (
+                <SortableTemplateRow
+                  showHandle={!readonly}
+                  enabled={!readonly && !draft && !invalid}
+                >
+                  <div className="node-group-summary">
+                    <div className="node-group-heading">
+                      <span className="template-entry-title" title={group.name}>
+                        {group.name}
+                      </span>
+                      <Tag color="blue">{group.type.toUpperCase()}</Tag>
+                    </div>
+                    {effectiveDependencies.find((n) => n.name === group.name)?.pending && (
+                      <Tag color="orange">待客户端注入</Tag>
+                    )}
                   </div>
-                  {effectiveDependencies.find((n) => n.name === group.name)?.pending && (
-                    <Tag color="orange">待客户端注入</Tag>
+                  {!readonly && (
+                    <Space size={4}>
+                      <Button
+                        type="text"
+                        aria-label={'编辑 ' + group.name}
+                        className={draft?.key === group.name ? 'template-edit-active' : undefined}
+                        aria-pressed={draft?.key === group.name}
+                        icon={<EditOutlined aria-hidden />}
+                        disabled={!!draft || invalid}
+                        onClick={() => open(group.name)}
+                      />
+                      {rowActions ? (
+                        rowActions(group.name)
+                      ) : (
+                        <Button
+                          type="text"
+                          danger
+                          aria-label={'移除 ' + group.name}
+                          icon={<DeleteOutlined aria-hidden />}
+                          disabled={!!draft || invalid}
+                          onClick={() => (onRemove ? onRemove(group.name) : open(group.name, true))}
+                        />
+                      )}
+                    </Space>
                   )}
-                </div>
-                {!readonly && (
-                  <Space size={4}>
-                    <Button
-                      type="text"
-                      aria-label={'编辑 ' + group.name}
-                      className={draft?.key === group.name ? 'template-edit-active' : undefined}
-                      aria-pressed={draft?.key === group.name}
-                      icon={<EditOutlined aria-hidden />}
-                      disabled={!!draft || invalid}
-                      onClick={() => open(group.name)}
-                    />
-                    <Button
-                      type="text"
-                      danger
-                      aria-label={'移除 ' + group.name}
-                      icon={<DeleteOutlined aria-hidden />}
-                      disabled={!!draft || invalid}
-                      onClick={() => (onRemove ? onRemove(group.name) : open(group.name, true))}
-                    />
-                  </Space>
-                )}
-                {entryActions?.(group.name)}
-              </SortableTemplateRow>
-            )}
-          </div>
-        );
-      })}
+                  {entryActions?.(group.name)}
+                </SortableTemplateRow>
+              )}
+            </div>
+          );
+        })}
+      {beforeAdd}
       {!readonly && !draft && (
         <Button
           className="template-entry-add"

@@ -1,20 +1,31 @@
 import type { Subscription, SubscriptionProxy } from '@/schemas/clash/subscription';
 
-export function subscriptionInboundOptions(proxies: SubscriptionProxy[]) {
-  const inbounds = new Map<string, { name: string; hostOverride: boolean }>();
+export interface SubscriptionInboundOption {
+  inboundKey: string;
+  name: string;
+  hostOverride: boolean;
+  proxyNames?: string[];
+}
+
+export function subscriptionInboundOptions(
+  proxies: SubscriptionProxy[],
+): SubscriptionInboundOption[] {
+  const inbounds = new Map<string, SubscriptionInboundOption>();
   for (const proxy of proxies) {
-    if (proxy.inboundKey)
-      inbounds.set(proxy.inboundKey, {
-        name: proxy.inboundName,
-        hostOverride: proxy.hostOverride || (inbounds.get(proxy.inboundKey)?.hostOverride ?? false),
-      });
+    if (!proxy.inboundKey) continue;
+    const option = inbounds.get(proxy.inboundKey) ?? {
+      inboundKey: proxy.inboundKey,
+      name: '',
+      hostOverride: false,
+      proxyNames: [],
+    };
+    option.proxyNames!.push(proxy.name);
+    option.hostOverride ||= proxy.hostOverride;
+    inbounds.set(proxy.inboundKey, option);
   }
-  const names = new Map<string, number>();
-  for (const { name } of inbounds.values()) names.set(name, (names.get(name) ?? 0) + 1);
-  return [...inbounds].map(([inboundKey, { name, hostOverride }]) => ({
-    hostOverride,
-    inboundKey,
-    name: !name || names.get(name)! > 1 ? `${name || '未命名入站'} (${inboundKey})` : name,
+  return [...inbounds.values()].map((option) => ({
+    ...option,
+    name: option.proxyNames!.join('、'),
   }));
 }
 

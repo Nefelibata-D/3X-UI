@@ -111,14 +111,11 @@
   align-items: flex-start;
   gap: 2px;
 }
-.node-group-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
+.node-group-summary > .template-entry-title {
+  max-width: 100%;
+  flex: none;
 }
-.node-group-heading > .ant-tag {
+.node-group-summary + .ant-tag {
   flex-shrink: 0;
 }
 .node-group-fields {

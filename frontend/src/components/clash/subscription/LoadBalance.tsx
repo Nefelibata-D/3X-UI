@@ -1,3 +1,7 @@
+import {
+  referencedRulesets,
+  removeReleasedRulesets,
+} from '@/lib/clash/subscription/template/symbols';
 import { parseBlacklistRule, formatBlacklistRule } from '@/lib/clash/subscription/blacklist';
 import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -26,7 +30,11 @@ interface Props {
   rules: { name: string; code: string; filename: string; blacklist: boolean }[];
 }
 export default function LoadBalance(props: Props) {
-  const [editing, setEditing] = useState<{ original: string; content: string; group?: string }>();
+  const [editing, setEditing] = useState<{
+    original: string;
+    content: string;
+    group?: string;
+  }>();
   const [pendingRule, setPendingRule] = useState(false);
   function open(group?: string) {
     setPendingRule(false);
@@ -53,11 +61,6 @@ export default function LoadBalance(props: Props) {
               type="primary"
               disabled={stale || pendingRule}
               onClick={() => {
-                const errors = loadBalanceErrors(editing.content);
-                if (errors.length) {
-                  void message.error(errors[0]);
-                  return;
-                }
                 props.onChange(editing.content);
                 setEditing(undefined);
               }}
@@ -144,7 +147,9 @@ function BalanceContent({
   const names = [
     ...new Set([...providerNames, ...rules.filter((r) => r.blacklist).map((r) => r.name)]),
   ];
+  const previousReferences = referencedRulesets(doc);
   function commit() {
+    removeReleasedRulesets(doc, previousReferences);
     const problems = loadBalanceErrors(doc.toString());
     if (problems.length) {
       void message.error(problems[0]);
@@ -193,7 +198,10 @@ function BalanceContent({
             }
           }
       }
-    return [...rows].map(([rule, proxies]) => ({ rule, proxies: [...proxies] }));
+    return [...rows].map(([rule, proxies]) => ({
+      rule,
+      proxies: [...proxies],
+    }));
   }
   function deleteRule(name: string, rule: string, save = true) {
     if (!isSeq(entries)) return;
@@ -206,7 +214,10 @@ function BalanceContent({
         if (parseBlacklistRule(String(rules.items[j])).rule === rule) rules.delete(j);
       if (!rules.items.length) entries.delete(i);
     }
-    if (save) commit();
+    if (save) {
+      removeReleasedRulesets(doc, previousReferences);
+      onChange(doc.toString());
+    }
   }
   function addGroup(name: string) {
     if (weightedIssue(name)) return;
@@ -312,12 +323,13 @@ function BalanceContent({
           ) : (
             <div
               key={g.name}
-              className={[
-                editing ? '' : 'template-route-card template-balance-card',
-                entryClassName?.(g.name),
-              ]
-                .filter(Boolean)
-                .join(' ')}
+              className={
+                editing
+                  ? undefined
+                  : ['template-route-card template-balance-card', entryClassName?.(g.name)]
+                      .filter(Boolean)
+                      .join(' ')
+              }
             >
               {!editing && (
                 <div className="template-balance-heading">

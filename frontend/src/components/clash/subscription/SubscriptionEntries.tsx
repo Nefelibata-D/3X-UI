@@ -1,6 +1,7 @@
+import { referencedRulesets } from '@/lib/clash/subscription/template/symbols';
 import { Button } from 'antd';
 import { StopOutlined, UndoOutlined, DeleteOutlined } from '@ant-design/icons';
-import { stringify } from 'yaml';
+import { parseDocument, stringify } from 'yaml';
 import type { ComponentProps } from 'react';
 import { sameConfigValue } from '@/lib/clash/subscription/publication';
 import TemplateInsert from './TemplateInsert';
@@ -8,6 +9,7 @@ import NodeGroups from './NodeGroups';
 import LoadBalance from './LoadBalance';
 import type { Subscription, RuleSet } from '@/schemas/clash/subscription';
 import {
+  composeSubscription,
   disabledField,
   documentObject,
   entries,
@@ -210,6 +212,26 @@ export default function SubscriptionEntries({
     const id = identity(name);
     const origin = inherited.get(id) as Group | undefined;
     const preset = balance ? origin?.type === 'load-balance' : inherited.has(id);
+    function applyDeletion(next: Subscription) {
+      const remaining = referencedRulesets(parseDocument(composeSubscription(base, next)));
+      const released = [...referencedRulesets(parseDocument(content))].filter(
+        (name) => !remaining.has(name),
+      );
+      if (!released.length) return change(next);
+      const config = documentObject(next.content);
+      const providers = new Map(entries(config, 'rule-providers'));
+      const inheritedProviders = new Map(entries(template, 'rule-providers'));
+      const disabledProviders = new Set(next.disabledProviders);
+      for (const name of released) {
+        providers.delete(name);
+        if (inheritedProviders.has(name)) disabledProviders.add(name);
+      }
+      change({
+        ...next,
+        content: stringify(setEntries(config, 'rule-providers', [...providers])),
+        disabledProviders: [...disabledProviders],
+      });
+    }
     function resetOrDelete() {
       if (balance) {
         const group = { ...(new Map(active).get(id) as Group) };
@@ -230,7 +252,7 @@ export default function SubscriptionEntries({
         if (sameConfigValue(rows, originalRows)) delete config['site-blacklist'];
         else config['site-blacklist'] = rows;
         delete snapshots[id];
-        change({
+        applyDeletion({
           ...binding,
           content: stringify(config),
           pausedContent: stringify({ ...paused, balanceSettings: snapshots }),
@@ -242,7 +264,7 @@ export default function SubscriptionEntries({
         return;
       }
       custom.delete(id);
-      change({
+      applyDeletion({
         ...binding,
         content: stringify(setEntries(overlay, section, [...custom])),
         groups:
@@ -278,7 +300,13 @@ export default function SubscriptionEntries({
     return preset ? [disable, resetDelete] : [resetDelete, disable];
   }
   const content = stringify(combined);
-  const common = { content, readonly: false, beforeAdd, entryClassName, rowActions };
+  const common = {
+    content,
+    readonly: false,
+    beforeAdd,
+    entryClassName,
+    rowActions,
+  };
   return (
     <div className="subscription-route-panel">
       <div className="subscription-route-scroll">

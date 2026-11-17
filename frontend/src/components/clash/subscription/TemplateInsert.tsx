@@ -1,4 +1,9 @@
-import { replaceSymbol, templateSymbols } from '@/lib/clash/subscription/template/symbols';
+import {
+  referencedRulesets,
+  removeReleasedRulesets,
+  replaceSymbol,
+  templateSymbols,
+} from '@/lib/clash/subscription/template/symbols';
 import ProxyChains from '@/components/clash/subscription/ProxyChains';
 import SortableTemplateRow, {
   SortableTemplateList,
@@ -294,7 +299,9 @@ export default function TemplateInsert(props: Props) {
                           props.onDisable(title);
                           return;
                         }
+                        const previous = referencedRulesets(doc);
                         doc.deleteIn([collection, entry]);
+                        if (tab === 'routes') removeReleasedRulesets(doc, previous);
                         onChange(doc.toString());
                       }}
                     />
@@ -453,6 +460,7 @@ function EntryForm({
         } else doc.setIn(['rule-providers', key], doc.createNode(item));
         setProvider(key);
       } else if (tab === 'routes') {
+        const previous = referencedRulesets(doc);
         const availableTargets = [...routeTargets, ...groups];
         if (!availableTargets.includes(target)) throw Error('目标必须是内置策略或 Proxy Group');
         if (!routeRuleTypes.includes(ruleType)) throw Error('请选择 Mihomo 支持的规则类型');
@@ -473,6 +481,7 @@ function EntryForm({
         const fallback = seq.items.findIndex((v) => String(v).startsWith('MATCH,'));
         if (typeof entry === 'number') seq.set(entry, doc.createNode(rule));
         else seq.items.splice(fallback < 0 ? seq.items.length : fallback, 0, doc.createNode(rule));
+        removeReleasedRulesets(doc, previous);
       }
       onChange(doc.toString());
       finish?.();

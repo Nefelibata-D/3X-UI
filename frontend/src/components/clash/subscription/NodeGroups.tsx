@@ -18,11 +18,12 @@ import {
   templateSymbols,
 } from '@/lib/clash/subscription/template/symbols';
 type Binding = { group: string; allNodes: boolean; nodes: string[] };
+import type { SubscriptionInboundOption } from '@/lib/clash/subscription/inbounds';
 interface Props {
   rowActions?: (name: string) => ReactNode;
   beforeAdd?: ReactNode;
   visible?: (name: string) => boolean;
-  inboundOptions?: { inboundKey: string; name: string; hostOverride: boolean }[];
+  inboundOptions?: SubscriptionInboundOption[];
   onRemove?: (name: string) => void;
   entryActions?: (name: string) => ReactNode;
   entryClassName?: (name: string) => string;
@@ -157,6 +158,23 @@ export default function NodeGroups({
   const groupNames = new Set(
     referenceNodes.filter((node) => node.kind === 'group').map((node) => node.name),
   );
+  const presetNames = new Set(
+    referenceNodes.filter((node) => node.kind === 'proxy').map((node) => node.name),
+  );
+  const sourceByName = new Map(
+    inboundOptions?.flatMap((option) =>
+      (option.proxyNames ?? []).map((name) => [name, option] as const),
+    ),
+  );
+  function covered(name: string, nodes: string[], all: boolean) {
+    const source = sourceByName.get(name);
+    return (
+      !!source &&
+      !presetNames.has(name) &&
+      !groupNames.has(name) &&
+      (all || nodes.includes(source.inboundKey))
+    );
+  }
   const memberNames = [
     ...new Set([
       ...referenceNodes
@@ -168,9 +186,13 @@ export default function NodeGroups({
   function renderMember(label: ReactNode, value: unknown, option = false) {
     const [kind, key] = JSON.parse(String(value)) as [string, string];
     const inbound =
-      kind === 'node' ? inboundOptions?.find((item) => item.inboundKey === key) : undefined;
+      kind === 'node'
+        ? inboundOptions?.find((item) => item.inboundKey === key)
+        : !presetNames.has(key) && !groupNames.has(key)
+          ? sourceByName.get(key)
+          : undefined;
     const group = kind === 'member' && groupNames.has(key);
-    const system = kind === 'node' || builtins.includes(key);
+    const system = kind === 'node' || !!inbound || builtins.includes(key);
     return (
       <span
         style={{
@@ -185,7 +207,13 @@ export default function NodeGroups({
         {kind !== 'all' && (
           <Space size={4}>
             <Tag color={group ? 'purple' : system ? 'cyan' : 'gold'}>
-              {group ? '节点组' : system ? '系统出站' : '预设出站'}
+              {group
+                ? '节点组'
+                : system
+                  ? '系统出站'
+                  : presetNames.has(key)
+                    ? '预设出站'
+                    : '成员引用'}
             </Tag>
             {inbound?.hostOverride && <Tag color="blue">主机覆盖</Tag>}
           </Space>
@@ -225,7 +253,9 @@ export default function NodeGroups({
               id={uid + '-members'}
               mode="multiple"
               value={[
-                ...draft.members.map((name) => JSON.stringify(['member', name])),
+                ...draft.members
+                  .filter((name) => !covered(name, draft.nodes, draft.allNodes))
+                  .map((name) => JSON.stringify(['member', name])),
                 ...(draft.allNodes
                   ? [JSON.stringify(['all', '*'])]
                   : draft.nodes.map((key) => JSON.stringify(['node', key]))),
@@ -258,7 +288,10 @@ export default function NodeGroups({
                   label: '自定义代理',
                   options: [
                     ...memberNames
-                      .filter((name) => !groupNames.has(name))
+                      .filter(
+                        (name) =>
+                          !groupNames.has(name) && !covered(name, draft.nodes, draft.allNodes),
+                      )
                       .map((name) => ({ value: JSON.stringify(['member', name]), label: name })),
                     ...(inboundOptions ?? []).map((inbound) => ({
                       value: JSON.stringify(['node', inbound.inboundKey]),
@@ -273,13 +306,23 @@ export default function NodeGroups({
               onChange={(values: string[]) => {
                 const selected = values.map((value) => JSON.parse(value) as [string, string]);
                 const allNodes = selected.some(([kind]) => kind === 'all');
+                const nodes = allNodes
+                  ? []
+                  : selected.filter(([kind]) => kind === 'node').map(([, key]) => key);
+                const selectedMembers = selected
+                  .filter(([kind]) => kind === 'member')
+                  .map(([, name]) => name);
+                // Preserve explicit references while their corresponding inbound stays selected.
+                const members = draft.members.filter(
+                  (name) =>
+                    selectedMembers.includes(name) ||
+                    (covered(name, draft.nodes, draft.allNodes) && covered(name, nodes, allNodes)),
+                );
                 setDraft({
                   ...draft,
                   allNodes,
-                  members: selected.filter(([kind]) => kind === 'member').map(([, value]) => value),
-                  nodes: allNodes
-                    ? []
-                    : selected.filter(([kind]) => kind === 'node').map(([, value]) => value),
+                  nodes,
+                  members: [...new Set([...members, ...selectedMembers])],
                 });
               }}
               placeholder={inboundOptions ? '选择代理' : '留空，等待客户端注入'}
@@ -335,16 +378,14 @@ export default function NodeGroups({
                   enabled={!readonly && !draft && !invalid}
                 >
                   <div className="node-group-summary">
-                    <div className="node-group-heading">
-                      <span className="template-entry-title" title={group.name}>
-                        {group.name}
-                      </span>
-                      <Tag color="blue">{group.type.toUpperCase()}</Tag>
-                    </div>
+                    <span className="template-entry-title" title={group.name}>
+                      {group.name}
+                    </span>
                     {effectiveDependencies.find((n) => n.name === group.name)?.pending && (
                       <Tag color="orange">待客户端注入</Tag>
                     )}
                   </div>
+                  <Tag color="blue">{group.type.toUpperCase()}</Tag>
                   {!readonly && (
                     <Space size={4}>
                       <Button

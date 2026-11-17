@@ -19,7 +19,14 @@ export function templateSymbols(doc: Document) {
   function add(node: unknown, kind: SymbolKind, declaration = false, start = 0, end?: number) {
     if (!isScalar(node) || (typeof node.value !== 'string' && node.value !== null)) return;
     const s = String(node.value ?? '');
-    slots.push({ node, kind, declaration, start, end: end ?? s.length, name: s.slice(start, end) });
+    slots.push({
+      node,
+      kind,
+      declaration,
+      start,
+      end: end ?? s.length,
+      name: s.slice(start, end),
+    });
   }
   function sequence(node: unknown, fn: (value: unknown) => void) {
     if (isSeq(node)) node.items.forEach(fn);
@@ -149,21 +156,27 @@ export function templateSymbols(doc: Document) {
       });
     }
   });
-  for (const key of ['nameserver-policy', 'proxy-server-nameserver-policy']) {
-    map(doc.getIn(['dns', key]), (k) => {
-      if (
-        !isScalar(k) ||
-        typeof k.value !== 'string' ||
-        !k.value.toLowerCase().startsWith('rule-set:')
-      )
-        return;
-      let start = 9;
-      for (const name of k.value.slice(start).split(',')) {
-        add(k, 'ruleset', false, start, start + name.length);
-        start += name.length + 1;
-      }
-    });
+  function prefixedRulesets(node: unknown) {
+    if (
+      !isScalar(node) ||
+      typeof node.value !== 'string' ||
+      !node.value.toLowerCase().startsWith('rule-set:')
+    )
+      return;
+    let start = 9;
+    for (const name of node.value.slice(start).split(',')) {
+      add(node, 'ruleset', false, start, start + name.length);
+      start += name.length + 1;
+    }
   }
+  for (const key of ['nameserver-policy', 'proxy-server-nameserver-policy'])
+    map(doc.getIn(['dns', key]), prefixedRulesets);
+  sequence(doc.getIn(['dns', 'fake-ip-filter']), (node) => {
+    if (doc.getIn(['dns', 'fake-ip-filter-mode']) === 'rule') rule(node, false);
+    else prefixedRulesets(node);
+  });
+  for (const key of ['force-domain', 'skip-domain', 'skip-src-address', 'skip-dst-address'])
+    sequence(doc.getIn(['sniffer', key]), prefixedRulesets);
   return slots;
 }
 export function replaceSymbol(slots: Slot[], kind: SymbolKind, oldName: string, newName: string) {
@@ -176,4 +189,19 @@ export function replaceSymbol(slots: Slot[], kind: SymbolKind, oldName: string, 
       (slot.blacklistTarget ? blacklistProxyToken(newName) : newName) +
       value.slice(slot.end);
   }
+}
+
+export function referencedRulesets(doc: Document) {
+  return new Set(
+    templateSymbols(doc)
+      .filter((slot) => slot.kind === 'ruleset' && !slot.declaration)
+      .map((slot) => slot.name),
+  );
+}
+
+export function removeReleasedRulesets(doc: Document, previous: Set<string>) {
+  const providers = doc.get('rule-providers');
+  if (!isMap(providers)) return;
+  const current = referencedRulesets(doc);
+  for (const name of previous) if (!current.has(name)) providers.delete(name);
 }

@@ -2,8 +2,9 @@ import ClientTrafficCell from '@/components/clients/ClientTrafficCell';
 import { useClashClientRatioQuery } from '@/api/queries/clash/allocation/useClientRatio';
 import './NodeTraffic.css';
 
-export default function ClientNodeTraffic({ clientId }: {
+export default function ClientNodeTraffic({ clientId, serverView }: {
   clientId?: number;
+  serverView?: boolean;
 }) {
   const query = useClashClientRatioQuery(clientId);
   if (!clientId) return <span>客户端标识缺失</span>;
@@ -20,7 +21,7 @@ export default function ClientNodeTraffic({ clientId }: {
             <span className="client-node-traffic-name" title={name}>{name}</span>
             {node.capacityBytes > 0 && node.budgetBytes === 0 ? <span>待分配额度</span> : !node.usageKnown ? <span>待回报</span> : (
               <ClientTrafficCell up={node.usageUp} down={node.usageDown} total={node.budgetBytes}
-                enabled={node.state !== 'disabled'} compact />
+                enabled={node.state !== 'disabled'} serverView={serverView} compact />
             )}
             {node.applyError && <span className="client-node-traffic-error">回报异常</span>}
           </div>

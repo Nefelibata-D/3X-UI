@@ -155,3 +155,44 @@
     padding: 12px;
   }
 }
+
+/* The policy body takes the remaining viewport space below the filters. */
+.lb-policy-view {
+  height: 100dvh;
+  min-height: 0;
+}
+.lb-policy-view .content-area,
+.lb-policy-view .load-balancing-page,
+.lb-policy-view .lb-tabs,
+.lb-policy-view .ant-tabs-body-holder,
+.lb-policy-view .ant-tabs-body,
+.lb-policy-view .ant-tabs-content-active,
+.lb-policy-view .ant-tabs-content-active > .ant-card,
+.lb-policy-view .ant-tabs-content-active > .ant-card > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.lb-policy-view .lb-summary-card,
+.lb-policy-view .lb-policy-filters,
+.lb-policy-view .ant-tabs-nav,
+.lb-policy-view .ant-card-head {
+  flex-shrink: 0;
+}
+.lb-policy-view .lb-policy-table {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #bfc2c7 transparent;
+}
+.lb-policy-view .lb-policy-table .ant-table-content {
+  overflow: visible;
+}
+.lb-policy-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}

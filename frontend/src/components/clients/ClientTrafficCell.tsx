@@ -15,6 +15,7 @@ export interface ClientTrafficCellProps {
   enabled?: boolean;
   trafficDiff?: number;
   compact?: boolean;
+  serverView?: boolean;
 }
 
 // Every prop is a primitive and the component is pure, so the memo bails out
@@ -28,6 +29,7 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
   enabled = true,
   trafficDiff = 0,
   compact = false,
+  serverView = false,
 }: ClientTrafficCellProps) {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -37,6 +39,9 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
     [up, down, total, enabled, trafficDiff, isDark],
   );
 
+  const factor = serverView ? 2 : 1;
+  const shownUsed = factor * display.used;
+  const shownLimit = factor * total;
   const popover = (
     <table className="client-traffic-popover">
       <tbody>
@@ -46,10 +51,11 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
           <td>↓</td>
           <td>{SizeFormatter.sizeFormat(down)}</td>
         </tr>
+        <tr><td colSpan={2}>服务器统计</td><td colSpan={2}>{SizeFormatter.sizeFormat(2 * display.used)}</td></tr>
         {!display.isUnlimited && (
           <tr>
             <td colSpan={2}>{t('remained')}</td>
-            <td colSpan={2}>{SizeFormatter.sizeFormat(display.remaining)}</td>
+            <td colSpan={2}>{SizeFormatter.sizeFormat(factor * display.remaining)}</td>
           </tr>
         )}
       </tbody>
@@ -67,10 +73,10 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
   return (
     <Popover content={popover} trigger={['hover', 'click']} placement="top">
       <div className={rootClass}>
-        <span className="client-traffic-cell-used">{SizeFormatter.sizeFormat(display.used)}</span>
+        <span className="client-traffic-cell-used">{SizeFormatter.sizeFormat(shownUsed)}</span>
         <Progress
           className="client-traffic-cell-bar"
-          aria-label={`${SizeFormatter.sizeFormat(display.used)} / ${display.isUnlimited ? t('subscription.unlimited') : SizeFormatter.sizeFormat(total)}`}
+          aria-label={`${SizeFormatter.sizeFormat(shownUsed)} / ${display.isUnlimited ? t('subscription.unlimited') : SizeFormatter.sizeFormat(shownLimit)}`}
           percent={display.percent}
           showInfo={false}
           strokeColor={display.strokeColor}
@@ -87,7 +93,7 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
               <InfinityIcon />
             </span>
           ) : (
-            SizeFormatter.sizeFormat(total)
+            SizeFormatter.sizeFormat(shownLimit)
           )}
         </span>
       </div>

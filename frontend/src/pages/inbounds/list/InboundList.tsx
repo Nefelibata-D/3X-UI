@@ -166,7 +166,9 @@ export default function InboundList({
     if (ok) setSelectedRowKeys([]);
   }, [onBulkDelete, selectedRowKeys]);
 
+  const [serverView, setServerView] = useState(false);
   const columns = useInboundColumns({
+    serverView,
     hasAnyRemark,
     hasAnySubSortIndex,
     hasActiveNode,
@@ -220,6 +222,17 @@ export default function InboundList({
   return (
     <Card
       hoverable
+      extra={
+        <Tooltip title="单向为上传加下载，双向按两倍估算。切换只影响显示。">
+          <Switch
+            aria-label="双向统计"
+            checkedChildren="双向"
+            unCheckedChildren="单向"
+            checked={serverView}
+            onChange={setServerView}
+          />
+        </Tooltip>
+      }
       title={
         <Space>
           <Button

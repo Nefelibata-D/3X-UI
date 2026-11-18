@@ -573,7 +573,7 @@ export default function LoadBalancingPage() {
   return (
     <ConfigProvider theme={antdThemeConfig}>
       <Layout
-        className={['nodes-page', isDark && 'is-dark', isUltra && 'is-ultra']
+        className={['nodes-page', activeTab === 'policies' && 'lb-policy-view', isDark && 'is-dark', isUltra && 'is-ultra']
           .filter(Boolean)
           .join(' ')}
       >

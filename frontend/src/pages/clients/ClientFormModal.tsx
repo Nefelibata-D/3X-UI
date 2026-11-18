@@ -990,7 +990,7 @@ export default function ClientFormModal({
                           <FormField
                             name="totalGB"
                             label={t('pages.clients.totalGB')}
-                            tooltip={t('pages.clients.totalGBDesc')}
+                            tooltip={<>{t('pages.clients.totalGBDesc')}。额度按上传加下载计算；机房双向预算可除以二填写。</>}
                             extra={totalNodeQuotaConflict ? <Typography.Text type="danger">{totalNodeQuotaError}</Typography.Text> : undefined}
                             transform={{ output: (v) => Number(v) || 0 }}
                           >

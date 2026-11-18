@@ -283,7 +283,7 @@ export default function ClientLoadBalancingTab({ clientId, mode }: ClientLoadBal
   return (
     <div className="client-lb-tab">
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        {'额度从各节点独立扣减，权重默认继承。客户端基本页的总流量上限另行生效。'}
+        {'节点额度按上传加下载扣减；按机房双向预算设置时，可将预算除以二填写。客户端基本页的总流量上限另行生效。'}
       </Typography.Paragraph>
 
       <Space wrap>

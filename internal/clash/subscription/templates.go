@@ -2,11 +2,14 @@ package subscription
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/storage"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TemplateGroupInjection struct {
@@ -167,14 +170,34 @@ func SaveTemplate(t *YAMLTemplate) error {
 	if t.ID == 0 {
 		return db.Create(t).Error
 	}
-	res := db.Model(t).Select("Name", "Content", "Injections").Updates(t)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return errors.New("模板不存在")
-	}
-	return nil
+	return db.Transaction(func(tx *gorm.DB) error {
+		var previous YAMLTemplate
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&previous, t.ID).Error; err != nil {
+			return err
+		}
+		if previous.Content != t.Content {
+			var old map[string]any
+			if err := yaml.Unmarshal([]byte(previous.Content), &old); err != nil {
+				return err
+			}
+			var bindings []SubscriptionBinding
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("template_id = ?", t.ID).Find(&bindings).Error; err != nil {
+				return err
+			}
+			for _, binding := range bindings {
+				before := binding
+				if err := rebaseBinding(old, config, &binding); err != nil {
+					return err
+				}
+				if !reflect.DeepEqual(before, binding) {
+					if err := tx.Model(&binding).Select("Content", "RuleOrder", "GroupOrder", "UpdatedAt").Updates(&binding).Error; err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return tx.Model(t).Select("Name", "Content", "Injections").Updates(t).Error
+	})
 }
 
 func DeleteTemplate(id uint) error {

@@ -393,6 +393,7 @@ export default function ClientsPage() {
   } = useHostsQuery();
   const hostsError = hosts.length > 0 ? '' : hostsFetchError;
 
+  const [serverView, setServerView] = useState(false);
   const [togglingEmail, setTogglingEmail] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
@@ -1168,7 +1169,7 @@ export default function ClientsPage() {
         key: 'traffic',
         width: 380,
         render: (_v, record) => (
-          <ClientNodeTraffic clientId={record.id} />
+          <ClientNodeTraffic serverView={serverView} clientId={record.id} />
         ),
       },
       {
@@ -1213,6 +1214,7 @@ export default function ClientsPage() {
       allGroups,
       datepicker,
       trafficDiff,
+      serverView,
       clientSpeed,
     ],
   );
@@ -1369,6 +1371,17 @@ export default function ClientsPage() {
                     <Card
                       size="small"
                       hoverable
+                      extra={
+                        <Tooltip title="单向为上传加下载，双向按两倍估算。切换只影响显示。">
+                          <Switch
+                            aria-label="双向统计"
+                            checkedChildren="双向"
+                            unCheckedChildren="单向"
+                            checked={serverView}
+                            onChange={setServerView}
+                          />
+                        </Tooltip>
+                      }
                       title={
                         <div className="card-toolbar">
                           {selectedRowKeys.length === 0 ? (
@@ -1845,7 +1858,7 @@ export default function ClientsPage() {
                                     </div>
                                   </div>
                                   <ClientCardComment comment={row.comment} />
-                                  <ClientNodeTraffic clientId={row.id} />
+                                  <ClientNodeTraffic serverView={serverView} clientId={row.id} />
                                   {(() => {
                                     const speed = clientSpeed[row.email];
                                     if (!isActiveSpeed(speed)) return null;

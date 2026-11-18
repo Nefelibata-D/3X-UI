@@ -28,6 +28,7 @@ import {
 import type { ClientCountEntry, DBInboundRecord, InboundSpeedEntry, RowAction } from './types';
 
 interface UseInboundColumnsParams {
+  serverView: boolean;
   hasAnyRemark: boolean;
   hasAnySubSortIndex: boolean;
   hasActiveNode: boolean;
@@ -43,6 +44,7 @@ interface UseInboundColumnsParams {
 }
 
 export function useInboundColumns({
+  serverView,
   hasAnyRemark,
   hasAnySubSortIndex,
   hasActiveNode,
@@ -57,6 +59,7 @@ export function useInboundColumns({
   onSwitchEnable,
 }: UseInboundColumnsParams): TableColumnType<DBInboundRecord>[] {
   const { t } = useTranslation();
+  const factor = serverView ? 2 : 1;
   const { datepicker } = useDatepicker();
 
   return useMemo(() => {
@@ -405,10 +408,11 @@ export function useInboundColumns({
                     <td>↑ {SizeFormatter.sizeFormat(record.up)}</td>
                     <td>↓ {SizeFormatter.sizeFormat(record.down)}</td>
                   </tr>
+                  <tr><td>服务器统计</td><td>{SizeFormatter.sizeFormat(2 * (record.up + record.down))}</td></tr>
                   {record.total > 0 && record.up + record.down < record.total && (
                     <tr>
                       <td>{t('remained')}</td>
-                      <td>{SizeFormatter.sizeFormat(record.total - record.up - record.down)}</td>
+                      <td>{SizeFormatter.sizeFormat(factor * (record.total - record.up - record.down))}</td>
                     </tr>
                   )}
                 </tbody>
@@ -416,8 +420,8 @@ export function useInboundColumns({
             }
           >
             <Tag color={ColorUtils.usageColor(record.up + record.down, trafficDiff, record.total)}>
-              {SizeFormatter.sizeFormat(record.up + record.down)} /{' '}
-              {record.total > 0 ? SizeFormatter.sizeFormat(record.total) : <InfinityIcon />}
+              {SizeFormatter.sizeFormat(factor * (record.up + record.down))} /{' '}
+              {record.total > 0 ? SizeFormatter.sizeFormat(factor * (record.total)) : <InfinityIcon />}
             </Tag>
           </Popover>
         ),
@@ -481,6 +485,7 @@ export function useInboundColumns({
     subEnable,
     expireDiff,
     trafficDiff,
+    factor,
     datepicker,
     onRowAction,
     onSwitchEnable,

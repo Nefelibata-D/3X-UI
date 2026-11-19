@@ -16303,6 +16303,86 @@
         }
       }
     },
+    "/panel/api/clash/clients/{id}/subscription/profiles": {
+      "get": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "List Clash profiles sharing the client subscription identity.",
+        "operationId": "get_panel_api_clash_clients_id_subscription_profiles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Load Balancing Gateway"
+        ],
+        "summary": "Create, save, rotate or delete one Clash profile.",
+        "operationId": "post_panel_api_clash_clients_id_subscription_profiles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/clash/clients/{id}/subscription/proxies": {
       "get": {
         "tags": [

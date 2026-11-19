@@ -35,6 +35,9 @@ func RenderManagedSubscription(subID string, draft *SubscriptionBinding, proxies
 		if err != nil {
 			return nil, true, err
 		}
+		if binding.Token != nil {
+			return nil, false, nil
+		}
 	}
 	return renderSubscriptionBinding(binding, proxies, nodeKeys, &subscriptionPublication{subID, baseURL}, inboundKeys)
 }

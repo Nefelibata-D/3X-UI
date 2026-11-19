@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -357,6 +358,8 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 	if a.clashEnabled {
 		gClash := g.Group(a.subClashPath, setNoCacheHeaders)
 		subscription.RegisterPublicSubscriptionRoutes(gClash.Group("/_project"))
+		gClash.GET("p/:token", a.profileClash)
+		gClash.HEAD("p/:token", a.profileClash)
 		gClash.GET(":subid", a.subClashs)
 		gClash.HEAD(":subid", a.subClashs)
 		if sameSubscriptionPath(a.subClashPath, subMihomoPath) {
@@ -544,8 +547,14 @@ func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
 		return
 	}
 	// Project: record the supported client sync separately from ordinary subscription access.
-	if err := subscription.RecordClientSubscriptionSync(c.Param("subid"), c.Request.UserAgent()); err != nil {
-		logger.Warning("Failed to record Clash Verge subscription sync:", err)
+	bindingID := c.Param("subid")
+	var token *string
+	if val, ok := c.Get("clashProfile"); ok {
+		profile := val.(subscription.SubscriptionBinding)
+		bindingID, token = profile.SubID, profile.Token
+	}
+	if err := subscription.RecordClientSubscriptionSync(bindingID, c.Request.UserAgent(), token); err != nil {
+		logger.Warning("Failed to record client subscription sync:", err)
 	}
 	if err := a.subService.RecordSubscriptionFetch(c.Param("subid")); err != nil {
 		logger.Warning("Failed to record subscription fetch:", err)
@@ -875,11 +884,43 @@ func (a *SUBController) subClashs(c *gin.Context) {
 	a.subClash(c, false)
 }
 
+func (a *SUBController) profileClash(c *gin.Context) {
+	row, err := subscription.ProfileByToken(c.Param("token"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.Status(http.StatusNotFound)
+		} else {
+			writeSubError(c, err)
+		}
+		return
+	}
+	c.Params = append(c.Params, gin.Param{Key: "subid", Value: row.Owner})
+	c.Set("clashProfile", row)
+	if !a.enforceHwid(c) {
+		return
+	}
+	if !a.serveClashBody(c, false, false) {
+		writeSubError(c, nil)
+		return
+	}
+	a.recordSubscriptionFetch(c)
+}
+
 func (a *SUBController) subClashLegacy(c *gin.Context) {
 	a.subClash(c, true)
 }
 
 func (a *SUBController) subClash(c *gin.Context, legacy bool) {
+	ok, err := subscription.DefaultLinkActive(c.Param("subid"))
+	if err != nil {
+		writeSubError(c, err)
+		return
+	}
+	if !ok {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
 	if strings.EqualFold(c.Query("view"), "raw") {
 		if !a.enforceHwid(c) {
 			return
@@ -907,7 +948,10 @@ func (a *SUBController) serveClashBody(c *gin.Context, rawDownload bool, legacy 
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var clashSub, header string
 	var err error
-	if legacy {
+	if val, ok := c.Get("clashProfile"); ok {
+		row := val.(subscription.SubscriptionBinding)
+		clashSub, header, err = a.subClashService.getClashWithProject(subId, host, false, &projectSubscription{binding: &row, download: true})
+	} else if legacy {
 		clashSub, header, err = a.subClashService.GetClashLegacy(subId, host)
 	} else {
 		clashSub, header, err = a.subClashService.GetClash(subId, host)

@@ -43,6 +43,7 @@ export interface ClashYamlEditorProps {
   minHeight?: string;
   maxHeight?: string;
   readOnly?: boolean;
+  light?: boolean;
   fontSize?: number;
 }
 export interface ClashYamlEditorHandle {
@@ -53,6 +54,7 @@ const ClashYamlEditor = forwardRef<ClashYamlEditorHandle, ClashYamlEditorProps>(
   function ClashYamlEditor(
     {
       value,
+      light = false,
       knownProxies = [],
       onChange,
       minHeight = '540px',
@@ -181,8 +183,8 @@ const ClashYamlEditor = forwardRef<ClashYamlEditorHandle, ClashYamlEditorProps>(
       editor.current?.updateOptions({ readOnly });
     }, [readOnly]);
     useEffect(() => {
-      monaco.editor.setTheme(isDark ? 'night-owl' : 'light-owl');
-    }, [isDark]);
+      monaco.editor.setTheme(!light && isDark ? 'night-owl' : 'light-owl');
+    }, [isDark, light]);
     function runContextAction(action: string) {
       const instance = editor.current;
       if (!instance) return;

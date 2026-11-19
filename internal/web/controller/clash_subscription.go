@@ -88,3 +88,30 @@ func (a *ClashController) validateSubscription(c *gin.Context) {
 	}
 	jsonObj(c, rendered, err)
 }
+
+func (a *ClashController) clientProfiles(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	rows, err := subscription.ClientProfiles(id)
+	jsonObj(c, rows, err)
+}
+func (a *ClashController) changeProfile(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	var change subscription.ProfileChange
+	if err = c.ShouldBindJSON(&change); err == nil && !change.Delete && change.TemplateID != 0 {
+		_, err = projectSubscription(c, id, &change.SubscriptionBinding)
+	}
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	row, err := subscription.ChangeProfile(id, change)
+	jsonObj(c, row, err)
+}

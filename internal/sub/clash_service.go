@@ -186,7 +186,7 @@ func (s *SubClashService) getClashWithProject(subId string, host string, legacy 
 		if err != nil {
 			return "", "", err
 		}
-		if project.inspect || project.binding != nil {
+		if project.inspect || (project.binding != nil && !project.download) {
 			header = ""
 		}
 		return body, header, err

@@ -10,10 +10,14 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/storage"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type SubscriptionBinding struct {
+	Owner      string   `json:"-" gorm:"index"`
+	Name       string   `json:"name,omitempty"`
+	Token      *string  `json:"token,omitempty" gorm:"uniqueIndex"`
+	UAKeywords []string `json:"uaKeywords" gorm:"serializer:json"`
+
 	LastSyncAt        int64                    `json:"lastSyncAt" gorm:"->;default:0"`
 	Dialers           map[string]string        `json:"dialers" gorm:"serializer:json"`
 	UpdatedAt         int64                    `json:"updatedAt" gorm:"autoUpdateTime:milli"`
@@ -78,10 +82,42 @@ func SaveClientSubscription(clientID int, row *SubscriptionBinding) error {
 	if err != nil {
 		return err
 	}
-	row.SubID = id
-	if row.TemplateID == 0 {
-		return db.Delete(&SubscriptionBinding{}, "sub_id = ?", id).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		var old SubscriptionBinding
+		if err := tx.Where("sub_id = ?", id).Take(&old).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		row.SubID = id
+		row.Name, row.Token, row.Owner, row.UAKeywords = old.Name, old.Token, old.Owner, old.UAKeywords
+		if row.TemplateID == 0 && old.Owner == "" && old.Name == "" {
+			return tx.Delete(&SubscriptionBinding{}, "sub_id = ?", id).Error
+		}
+		return writeBinding(tx, clientID, row, false, old.UpdatedAt)
+	})
+}
+func writeBinding(db *gorm.DB, clientID int, row *SubscriptionBinding, create bool, previous int64) error {
+	if row.TemplateID != 0 {
+		if err := validateBinding(db, clientID, row); err != nil {
+			return err
+		}
 	}
+	row.UpdatedAt = max(time.Now().UnixMilli(), previous+1)
+	if create {
+		return db.Create(row).Error
+	}
+	result := db.Model(row).Where("sub_id = ? AND COALESCE(updated_at,0) = ?", row.SubID, previous).Select("*").Omit("SubID", "LastSyncAt").UpdateColumns(row)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 0 {
+		return nil
+	}
+	if previous != 0 {
+		return errors.New("订阅已变更，请重新打开")
+	}
+	return db.Create(row).Error
+}
+func validateBinding(db *gorm.DB, clientID int, row *SubscriptionBinding) error {
 	var template YAMLTemplate
 	if err := db.First(&template, row.TemplateID).Error; err != nil {
 		return err
@@ -126,19 +162,39 @@ func SaveClientSubscription(clientID int, row *SubscriptionBinding) error {
 			}
 		}
 	}
-	row.UpdatedAt = time.Now().UnixMilli()
-	return db.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error
+	return nil
 }
 
-func RecordClientSubscriptionSync(subID, userAgent string) error {
-	if !strings.Contains(strings.ToLower(userAgent), "clash-verge") {
-		return nil
-	}
+func RecordClientSubscriptionSync(subID, userAgent string, token *string) error {
 	db, err := storage.DB()
 	if err != nil {
 		return err
 	}
-	return db.Table((SubscriptionBinding{}).TableName()).Where("sub_id = ?", subID).UpdateColumn("last_sync_at", time.Now().UnixMilli()).Error
+	row, err := subscriptionByID(subID)
+	missing := errors.Is(err, gorm.ErrRecordNotFound)
+	if err != nil && !missing {
+		return err
+	}
+	words := row.UAKeywords
+	if words == nil {
+		words = defaultKeywords()
+	}
+	ua := strings.ToLower(userAgent)
+	if !slices.ContainsFunc(words, func(w string) bool { return w != "" && strings.Contains(ua, strings.ToLower(w)) }) {
+		return nil
+	}
+	if missing {
+		// Seed an untouched default only for a real client without managed profiles.
+		seed := db.Model(&model.ClientRecord{}).Select("sub_id, ?", "{}").Where("sub_id = ?", subID).Where("NOT EXISTS (?)", db.Model(&SubscriptionBinding{}).Select("1").Where("owner = ?", subID)).Limit(1)
+		if err := db.Exec("INSERT INTO clash_subscription_bindings (sub_id, content) SELECT * FROM (?) AS defaults WHERE true ON CONFLICT (sub_id) DO NOTHING", seed).Error; err != nil {
+			return err
+		}
+	}
+	query := db.Table((SubscriptionBinding{}).TableName()).Where("sub_id = ?", subID)
+	if token == nil {
+		query = query.Where("token IS NULL")
+	} else {
+		query = query.Where("token = ?", *token)
+	}
+	return query.UpdateColumn("last_sync_at", time.Now().UnixMilli()).Error
 }
-
-// InboundKey identifies the official inbound independently of its name or server.

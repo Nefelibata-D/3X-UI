@@ -1,32 +1,38 @@
-import { useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
-import { useClashSubscription, useSaveClashSubscription } from '@/api/queries/clash/subscription';
-import { injectPublication, restorePublicationFields } from '@/lib/clash/subscription/publication';
-import type {
-  Template,
-  RuleSet,
-  SubscriptionProxy,
-  PublicationContext,
-} from '@/schemas/clash/subscription';
+import { useImperativeHandle, useRef, useState } from 'react';
 import {
   Alert,
-  message,
   Button,
   Checkbox,
-  Modal,
   Select,
   Space,
-  Spin,
-  Tabs,
   Tag,
   Typography,
   Form,
+  ConfigProvider,
+  Dropdown,
+  Modal,
+  Spin,
+  Tabs,
+  message,
+  theme,
 } from 'antd';
-import { stringify } from 'yaml';
+import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { keys } from '@/api/queryKeys';
+import { useClashSubscription } from '@/api/queries/clash/subscription';
+import { changeProfile } from '@/lib/clash/subscription/api';
+import { RandomUtil } from '@/utils';
+import { emptySubscription, type Profile, type Subscription } from '@/schemas/clash/subscription';
 import type { ClientRecord } from '@/hooks/useClients';
+
+import { useForm, useWatch } from 'react-hook-form';
+
+import { injectPublication, restorePublicationFields } from '@/lib/clash/subscription/publication';
+import { stringify } from 'yaml';
+
 import TemplateInsert from '@/components/clash/subscription/TemplateInsert';
-import SubscriptionEntries from './SubscriptionEntries';
-import TemplateWorkspace from '@/components/clash/subscription/TemplateWorkspace';
+import SubscriptionEntries from '@/components/clash/subscription/SubscriptionEntries';
+import TemplateWorkspace from './TemplateWorkspace';
 import { deleteSubscriptionGroup } from '@/lib/clash/subscription/deletion';
 import { validateTemplate } from '@/lib/clash/subscription/template/validation';
 import {
@@ -36,50 +42,233 @@ import {
   subscriptionFromYAML,
   type Section,
 } from '@/lib/clash/subscription/model';
-import { emptySubscription, type Subscription } from '@/schemas/clash/subscription';
 import '@/components/clash/subscription/Templates.css';
-import './ClientModal.css';
+import '@/components/clash/subscription/ClientModal.css';
 
 interface Props {
   client: ClientRecord;
   subscriptionURL?: string;
   onClose: () => void;
 }
+type Data = NonNullable<ReturnType<typeof useClashSubscription>['data']>;
+type DraftProfile = Profile & { isNew?: boolean; pendingToken?: string };
 export default function ClientSubscriptionModal(props: Props) {
   const query = useClashSubscription(props.client.id);
   return (
-    <Modal
-      open
-      title={`Clash 订阅 · ${props.client.email}`}
-      width={1240}
-      centered
-      footer={null}
-      onCancel={props.onClose}
-      destroyOnHidden
+    <ConfigProvider theme={{ inherit: false, algorithm: theme.defaultAlgorithm }}>
+      <Modal
+        open
+        centered
+        aria-label="Clash 订阅"
+        width={1240}
+        footer={null}
+        onCancel={props.onClose}
+      >
+        {query.isPending && <Spin />}
+        {query.error && <Alert type="error" title={query.error.message} />}
+        {query.data && props.client.id && (
+          <ProfileTabs clientId={props.client.id} {...props} data={query.data} />
+        )}
+      </Modal>
+    </ConfigProvider>
+  );
+}
+function ProfileTabs({
+  client,
+  clientId,
+  subscriptionURL,
+  onClose,
+  data,
+}: Props & { data: Data; clientId: number }) {
+  const [profiles, setProfiles] = useState<DraftProfile[]>(data.profiles);
+  const [active, setActive] = useState(profiles[0].key);
+  const [visited, setVisited] = useState(() => new Set([active]));
+  function select(key: string) {
+    setActive(key);
+    setVisited((prev) => new Set(prev).add(key));
+  }
+  const [editing, setEditing] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cache = useQueryClient();
+  const reader = useRef<{ read: () => Subscription | undefined }>(null);
+  const draft = profiles.find((p) => p.key === active)!;
+  const latest = profiles
+    .filter((p) => !p.isNew)
+    .reduce<DraftProfile | undefined>(
+      (a, b) => (!a || a.updatedAt < b.updatedAt ? b : a),
+      undefined,
+    );
+  function update(key: string, changes: Partial<DraftProfile>) {
+    setProfiles((all) => all.map((p) => (p.key === key ? { ...p, ...changes } : p)));
+  }
+  function add(mode: string) {
+    const source = mode === 'current' ? draft : latest;
+    const binding = mode === 'current' ? reader.current?.read() : source;
+    if (!source || !binding) {
+      void message.error('请先修复当前配置');
+      return;
+    }
+    const key = RandomUtil.randomUUID();
+    setProfiles((all) => [
+      ...all,
+      {
+        ...structuredClone(binding),
+        key,
+        name: source.name + ' 副本',
+        token: RandomUtil.randomUUID(),
+        updatedAt: 0,
+        lastSyncAt: 0,
+        isNew: true,
+      },
+    ]);
+    select(key);
+  }
+  async function remove(key: string) {
+    const profile = profiles.find((p) => p.key === key);
+    if (!profile || profiles.length < 2 || busy) return;
+    setBusy(true);
+    try {
+      if (!profile.isNew) {
+        await changeProfile(clientId, profile, profile.updatedAt, false, true);
+        await cache.invalidateQueries({ queryKey: keys.clash.subscription(clientId) });
+      }
+      const rest = profiles.filter((p) => p.key !== key);
+      setProfiles(rest);
+      if (active === key) select(rest[0].key);
+    } catch (err) {
+      void message.error(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function save(p: DraftProfile, binding: Subscription, rotate: boolean) {
+    setBusy(true);
+    try {
+      const result = await changeProfile(
+        clientId,
+        { ...binding, key: p.key, name: p.name, token: rotate ? p.pendingToken : p.token },
+        p.updatedAt,
+        p.isNew,
+      );
+      if (!result) throw Error('订阅保存失败');
+      update(p.key, { ...result, isNew: false, pendingToken: undefined });
+      await cache.invalidateQueries({ queryKey: keys.clash.subscription(clientId) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  const plus = (
+    <Dropdown
+      trigger={['click']}
+      disabled={busy}
+      menu={{
+        items: [
+          { key: 'current', label: '复制当前订阅' },
+          { key: 'latest', label: '复制最近保存的订阅', disabled: !latest },
+        ],
+        onClick: ({ key }) => add(key),
+      }}
     >
-      {query.isPending && <Spin />}
-      {query.error && <Alert type="error" title={query.error.message} />}
-      {query.data && <SubscriptionEditor {...props} data={query.data} />}
-    </Modal>
+      <Button aria-label="添加订阅" type="text" icon={<PlusOutlined />} />
+    </Dropdown>
+  );
+  return (
+    <>
+      <Tabs
+        className="profile-tabs"
+        type="editable-card"
+        activeKey={active}
+        hideAdd
+        onChange={select}
+        tabBarExtraContent={plus}
+        onEdit={(key, action) => {
+          if (typeof key === 'string' && action === 'remove') void remove(key);
+        }}
+        items={profiles.map((p) => ({
+          key: p.key,
+          closable:
+            !busy &&
+            (p.isNew ? profiles.length > 1 : profiles.filter((item) => !item.isNew).length > 1),
+          label: (
+            <span className="profile-label">
+              <span>
+                {p.name} {active === p.key && <EditOutlined />}
+              </span>
+              {active === p.key && (
+                <input
+                  aria-label="订阅名称"
+                  defaultValue={p.name}
+                  className={editing === p.key ? 'editing' : ''}
+                  onFocus={(e) => {
+                    setEditing(p.key);
+                    e.target.select();
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim() || p.name;
+                    e.target.value = name;
+                    update(p.key, { name });
+                    setEditing('');
+                  }}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Escape') {
+                      e.currentTarget.value = p.name;
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                />
+              )}
+            </span>
+          ),
+        }))}
+      />
+      {profiles
+        .filter((p) => visited.has(p.key))
+        .map((p) => {
+          const token = p.pendingToken ?? p.token;
+          const address =
+            subscriptionURL &&
+            (token
+              ? new URL('p/' + token, new URL(subscriptionURL, window.location.href)).href
+              : subscriptionURL);
+          return (
+            <div key={p.key} hidden={active !== p.key}>
+              <SubscriptionEditor
+                client={client}
+                subscriptionURL={address}
+                pendingRotation={!!p.pendingToken}
+                onRotate={() => update(p.key, { pendingToken: RandomUtil.randomUUID() })}
+                onClose={onClose}
+                draftRef={active === p.key ? reader : null}
+                data={{ ...data, binding: p }}
+                onSave={(binding, rotate) => save(p, binding, rotate)}
+              />
+            </div>
+          );
+        })}
+    </>
   );
 }
 
 function SubscriptionEditor({
   client,
   subscriptionURL,
+  pendingRotation,
+  onRotate,
   onClose,
-  data: initialData,
+  data,
+  draftRef,
+  onSave,
 }: Props & {
-  data: {
-    proxies: SubscriptionProxy[];
-    publication: PublicationContext;
-    binding: Subscription;
-    templates: Template[];
-    inbounds: { inboundKey: string; name: string; hostOverride: boolean }[];
-    rules: RuleSet[];
-  };
+  pendingRotation: boolean;
+  onRotate: () => void;
+  draftRef: React.Ref<{ read: () => Subscription | undefined }>;
+  onSave: (draft: Subscription, rotate: boolean) => Promise<void>;
+  data: Omit<Data, 'profiles'> & { binding: Subscription };
 }) {
-  const [data] = useState(initialData);
+  const { token } = theme.useToken();
   const [modal, modalContextHolder] = Modal.useModal();
   const form = useForm<Subscription>({ defaultValues: data.binding });
   const draft = useWatch({ control: form.control }) as Subscription;
@@ -90,13 +279,16 @@ function SubscriptionEditor({
   const [showCustom, setShowCustom] = useState(true);
   const [yamlDraft, setYamlDraft] = useState<string>();
   const [yamlError, setYamlError] = useState('');
+  useImperativeHandle(draftRef, () => ({
+    read: () => (yamlError ? undefined : form.getValues()),
+  }));
   const changeBinding: typeof form.setValue = (...args) => {
     setYamlDraft(undefined);
     setYamlError('');
     form.setValue(...args);
   };
   const [error, setError] = useState('');
-  const saveMutation = useSaveClashSubscription(client.id);
+
   const template = data.templates.find((item) => item.id === draft.templateId);
   let composed = '{}',
     compositionError = '';
@@ -255,9 +447,44 @@ function SubscriptionEditor({
         if (!template) throw new Error('请选择有效模板');
         if (compositionError) throw new Error(compositionError);
       }
-      await saveMutation.mutateAsync(draft);
+
+      let rotate = false;
+      if (pendingRotation) {
+        const choice = await new Promise<'keep' | 'rotate' | 'cancel'>((resolve) => {
+          const dialog = modal.confirm({
+            centered: true,
+            title: '保存订阅',
+            content: '轮转后旧链接将失效。你也可以保留原链接，仅保存配置。',
+            okText: '保存并轮转',
+            cancelText: '取消',
+            onOk: () => {
+              resolve('rotate');
+            },
+            onCancel: () => {
+              resolve('cancel');
+            },
+            footer: (_, { CancelBtn, OkBtn }) => (
+              <div className="rotation-actions" style={{ gap: token.marginSM }}>
+                <CancelBtn />
+                <Button
+                  style={{ background: token.colorWarning, color: token.colorText }}
+                  onClick={() => {
+                    resolve('keep');
+                    dialog.destroy();
+                  }}
+                >
+                  保存但不轮转
+                </Button>
+                <OkBtn />
+              </div>
+            ),
+          });
+        });
+        if (choice === 'cancel') return;
+        rotate = choice === 'rotate';
+      }
+      await onSave(draft, rotate);
       void message.success('订阅配置已保存');
-      onClose();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -274,7 +501,7 @@ function SubscriptionEditor({
       hour12: false,
     });
   const settings = (
-    <Form layout="vertical" className="template-entry-form">
+    <Form layout="horizontal" colon={false} className="template-entry-form subscription-settings">
       <Form.Item label="订阅模板">
         <Select
           aria-label="选择订阅模板"
@@ -291,18 +518,40 @@ function SubscriptionEditor({
             setYamlError('');
             setShowTemplate(true);
             setShowCustom(true);
-            form.reset({ ...emptySubscription, templateId });
+            form.reset({ ...emptySubscription, uaKeywords: draft.uaKeywords, templateId });
           }}
         />
       </Form.Item>
+      <Form.Item label="客户端">
+        <Typography.Text>{client.email}</Typography.Text>
+      </Form.Item>
       <Form.Item label="订阅地址">
         {subscriptionURL ? (
-          <Typography.Paragraph
-            className="subscription-address"
-            copyable={{ text: subscriptionURL }}
-          >
-            {subscriptionURL}
-          </Typography.Paragraph>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span
+              aria-label="完整订阅地址"
+              title={subscriptionURL}
+              style={{
+                color: pendingRotation ? '#237804' : undefined,
+                minWidth: 0,
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {subscriptionURL}
+            </span>
+            {pendingRotation && <Tag color="green">待保存</Tag>}
+            <Typography.Text copyable={{ text: subscriptionURL }} />
+            <Button
+              aria-label="轮转链接"
+              title="轮转链接"
+              size="small"
+              type="link"
+              icon={<ReloadOutlined />}
+              onClick={onRotate}
+            />
+          </div>
         ) : (
           <Typography.Text type="secondary">尚未启用 Clash 订阅地址</Typography.Text>
         )}
@@ -324,6 +573,23 @@ function SubscriptionEditor({
         <Tag className="subscription-time-tag">
           {data.binding.lastSyncAt ? formatTime(data.binding.lastSyncAt) : '尚未同步'}
         </Tag>
+      </Form.Item>{' '}
+      <Form.Item label="UA 关键词">
+        <Select
+          mode="tags"
+          aria-label="UA 关键词"
+          value={draft.uaKeywords}
+          placeholder="输入关键词后按 Enter"
+          options={['clash-verge', 'ShadowRocket'].map((value) => ({ value, label: value }))}
+          onChange={(values: string[]) => {
+            const unique = new Map<string, string>();
+            for (const item of values) {
+              const word = item.trim();
+              if (word) unique.set(word.toLowerCase(), word);
+            }
+            form.setValue('uaKeywords', [...unique.values()], { shouldDirty: true });
+          }}
+        />
       </Form.Item>
     </Form>
   );
@@ -331,6 +597,8 @@ function SubscriptionEditor({
     <>
       {modalContextHolder}
       <TemplateWorkspace
+        light
+        title="编辑器"
         content={yamlDraft ?? previewContent}
         knownProxies={selectedProxies.map((p) => p.name)}
         onChange={(content) => {
@@ -469,7 +737,7 @@ function SubscriptionEditor({
       )}
       <div className="subscription-footer">
         <Space>
-          <Button onClick={onClose}>取消</Button>
+          <Button onClick={onClose}>关闭</Button>
           <Button
             type="primary"
             disabled={!chainValid || !!publicationError || !!yamlError || !!compositionError}

@@ -5,6 +5,10 @@ const strings = z
   .nullish()
   .transform((v) => v ?? []);
 export const subscriptionSchema = z.object({
+  uaKeywords: z
+    .array(z.string())
+    .nullish()
+    .transform((v) => v ?? ['clash-verge', 'ShadowRocket']),
   lastSyncAt: z.number().optional().default(0),
   updatedAt: z.number().optional().default(0),
   templateId: z.number(),
@@ -30,6 +34,7 @@ export const subscriptionSchema = z.object({
 });
 export type Subscription = z.infer<typeof subscriptionSchema>;
 export const emptySubscription: Subscription = {
+  uaKeywords: ['clash-verge', 'ShadowRocket'],
   updatedAt: 0,
   lastSyncAt: 0,
   templateId: 0,
@@ -107,3 +112,10 @@ export const publicationContextSchema = z.object({
   nodes: z.record(z.string(), z.object({ name: z.string(), id: z.string(), weight: z.number() })),
 });
 export type PublicationContext = z.infer<typeof publicationContextSchema>;
+
+export const profileSchema = subscriptionSchema.extend({
+  key: z.string(),
+  name: z.string(),
+  token: z.string().nullish(),
+});
+export type Profile = z.infer<typeof profileSchema>;

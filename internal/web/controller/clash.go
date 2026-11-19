@@ -20,6 +20,8 @@ func NewClashController(g *gin.RouterGroup) *ClashController {
 	c.POST("/weights", a.saveWeights)
 	c.GET("/clients/:id", a.clientRatio)
 	c.POST("/clients/:id/ratio", a.saveClientRatio)
+	c.GET("/clients/:id/subscription/profiles", requireClashFormat, a.clientProfiles)
+	c.POST("/clients/:id/subscription/profiles", requireClashFormat, a.changeProfile)
 	c.GET("/clients/:id/subscription", requireClashFormat, a.clientSubscription)
 	c.POST("/clients/:id/subscription", requireClashFormat, a.saveClientSubscription)
 	c.GET("/clients/:id/subscription/proxies", requireClashFormat, a.subscriptionProxies)

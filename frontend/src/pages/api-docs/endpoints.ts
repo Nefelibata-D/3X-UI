@@ -2818,6 +2818,16 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/clash/clients/:id/subscription/profiles',
+        summary: 'List Clash profiles sharing the client subscription identity.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/clash/clients/:id/subscription/profiles',
+        summary: 'Create, save, rotate or delete one Clash profile.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/clash/clients/:id/subscription/proxies',
         summary:
           'List authorized proxies with their official generated Clash configurations and node keys. With context=1, return {proxies, publication} including the administrator-only publication snapshot (baseURL, uuid, nodes, error) for local subscription preview.',

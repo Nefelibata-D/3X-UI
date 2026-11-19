@@ -36,6 +36,9 @@ func renderSubscriptionBinding(binding SubscriptionBinding, proxies []map[string
 	if err != nil {
 		return nil, true, err
 	}
+	if binding.TemplateID == 0 {
+		return nil, false, nil
+	}
 	var template YAMLTemplate
 	if err := db.First(&template, binding.TemplateID).Error; err != nil {
 		return nil, true, err

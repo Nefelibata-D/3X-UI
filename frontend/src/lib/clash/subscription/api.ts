@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { HttpUtil, type Msg } from '@/utils';
 import {
+  profileSchema,
+  type Profile,
   ruleSetSchema,
   templateSchema,
   subscriptionSchema,
@@ -40,8 +42,6 @@ export const fetchTemplates = () =>
       .nullable()
       .transform((rows) => rows ?? []),
   );
-export const fetchSubscription = (id: number | undefined) =>
-  get(clientPath(id), subscriptionSchema);
 export const fetchSubscriptionProxies = (id: number | undefined) =>
   get(
     clientPath(id) + '/proxies?context=1',
@@ -64,9 +64,6 @@ export async function saveTemplate(row: Template) {
 export async function deleteTemplate(id: number) {
   success(await HttpUtil.delete(root + `/templates/${id}`, { silent: true }));
 }
-export async function saveSubscription(id: number | undefined, row: Subscription) {
-  success(await HttpUtil.post(root + clientPath(id), subscriptionSchema.parse(row), json));
-}
 export async function validateSubscription(id: number | undefined, row: Subscription) {
   return z
     .string()
@@ -79,4 +76,23 @@ export async function validateSubscription(id: number | undefined, row: Subscrip
         ),
       ),
     );
+}
+
+export const fetchProfiles = (id: number | undefined) =>
+  get(clientPath(id) + '/profiles', profileSchema.array());
+export async function changeProfile(
+  id: number,
+  profile: Profile,
+  expected: number,
+  create = false,
+  remove = false,
+) {
+  const result = success(
+    await HttpUtil.post(
+      root + clientPath(id) + '/profiles',
+      { ...profile, expected, create, delete: remove },
+      json,
+    ),
+  );
+  return remove ? undefined : profileSchema.parse(result);
 }

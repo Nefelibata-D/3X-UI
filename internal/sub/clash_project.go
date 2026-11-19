@@ -18,10 +18,11 @@ type projectProxySource struct {
 	hostOverride bool
 }
 type projectSubscription struct {
-	binding *subscription.SubscriptionBinding
-	inspect bool
-	context bool
-	sources []projectProxySource
+	binding  *subscription.SubscriptionBinding
+	download bool
+	inspect  bool
+	context  bool
+	sources  []projectProxySource
 }
 
 func (s *SubClashService) ProjectSubscription(subID, host string, binding *subscription.SubscriptionBinding, context ...bool) (string, error) {
@@ -105,7 +106,7 @@ func (p *projectSubscription) render(subID string, proxies []map[string]any, leg
 	if err != nil {
 		return "", true, err
 	}
-	if !bound && p.binding == nil {
+	if !bound && (p.binding == nil || p.download) {
 		return "", false, nil
 	}
 	if err := validateClashRouteGraph(config); err != nil {

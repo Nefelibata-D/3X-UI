@@ -5,7 +5,6 @@ import {
   expandLegacyNodeBindings,
 } from '@/lib/clash/subscription/inbounds';
 import * as api from '@/lib/clash/subscription/api';
-import type { Subscription } from '@/schemas/clash/subscription';
 
 export function useClashRuleSets(enabled = true) {
   return useQuery({ queryKey: keys.clash.rulesets(), queryFn: api.fetchRuleSets, enabled });
@@ -15,8 +14,8 @@ export function useClashTemplates() {
 }
 export function useClashSubscription(id: number | undefined) {
   const binding = useQuery({
-    queryKey: keys.clash.subscription(id ?? 0),
-    queryFn: () => api.fetchSubscription(id),
+    queryKey: [...keys.clash.subscription(id ?? 0), 'profiles'],
+    queryFn: () => api.fetchProfiles(id),
     enabled: id !== undefined && id > 0,
   });
   const proxies = useQuery({
@@ -33,7 +32,10 @@ export function useClashSubscription(id: number | undefined) {
     data:
       binding.data && proxies.data && templates.data && rules.data
         ? {
-            binding: expandLegacyNodeBindings(binding.data, proxies.data.proxies),
+            profiles: binding.data.map((p) => ({
+              ...p,
+              ...expandLegacyNodeBindings(p, proxies.data.proxies),
+            })),
             proxies: proxies.data.proxies,
             publication: proxies.data.publication,
             templates: templates.data,
@@ -67,11 +69,4 @@ export function useClashTemplateMutations() {
   const save = useMutation({ mutationFn: api.saveTemplate, onSuccess: invalidate });
   const remove = useMutation({ mutationFn: api.deleteTemplate, onSuccess: invalidate });
   return { save, remove };
-}
-export function useSaveClashSubscription(id: number | undefined) {
-  const cache = useQueryClient();
-  return useMutation({
-    mutationFn: (row: Subscription) => api.saveSubscription(id, row),
-    onSuccess: () => cache.invalidateQueries({ queryKey: keys.clash.subscription(id ?? 0) }),
-  });
 }

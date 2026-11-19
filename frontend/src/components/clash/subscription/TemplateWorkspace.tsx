@@ -4,6 +4,8 @@ import YamlEditor from '@/components/clash/subscription/ClashYamlEditor';
 import '@/components/clash/subscription/Templates.css';
 
 interface Props {
+  title?: string;
+  light?: boolean;
   content: string;
   knownProxies?: string[];
   onChange: (content: string) => void;
@@ -14,6 +16,8 @@ interface Props {
 }
 
 export default function TemplateWorkspace({
+  title = '基础 YAML',
+  light = false,
   content,
   knownProxies,
   onChange,
@@ -31,7 +35,7 @@ export default function TemplateWorkspace({
     <div className="clash-template-workspace">
       <section className="clash-template-code">
         <Flex justify="space-between" style={{ padding: '12px 16px' }}>
-          <Typography.Text strong>基础 YAML</Typography.Text>
+          <Typography.Text strong>{title}</Typography.Text>
           <Flex align="center" gap={12}>
             <Flex align="center" gap={6}>
               <Typography.Text type="secondary">字号</Typography.Text>
@@ -53,6 +57,7 @@ export default function TemplateWorkspace({
           </Flex>
         </Flex>
         <YamlEditor
+          light={light}
           value={content}
           knownProxies={knownProxies}
           fontSize={fontSize}

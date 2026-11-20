@@ -1,4 +1,4 @@
-package controller
+package httpapi
 
 import (
 	"strconv"
@@ -8,14 +8,14 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
 )
 
-type ClashController struct {
-	BaseController
+type handlers struct {
+	reply func(*gin.Context, string, any, error)
 }
 
-func NewClashController(g *gin.RouterGroup) *ClashController {
-	a := &ClashController{}
+func RegisterAdmin(g *gin.RouterGroup, reply func(*gin.Context, string, any, error)) {
+	a := &handlers{reply: reply}
 	c := g.Group("/clash")
-	registerRuleSets(c)
+	a.registerRuleSets(c)
 	c.GET("/overview", a.overview)
 	c.POST("/weights", a.saveWeights)
 	c.GET("/clients/:id", a.clientRatio)
@@ -30,60 +30,59 @@ func NewClashController(g *gin.RouterGroup) *ClashController {
 	c.POST("/sync", a.sync)
 	c.POST("/policy/apply", a.applyPolicy)
 	c.GET("/policy/report", a.reportPolicy)
-	return a
 }
 
-func (a *ClashController) overview(c *gin.Context) {
+func (a *handlers) overview(c *gin.Context) {
 	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
-		jsonMsg(c, "load clash catalog", err)
+		a.reply(c, "load clash catalog", nil, err)
 		return
 	}
 	out, err := policy.BuildOverview(cat)
-	jsonObj(c, out, err)
+	a.reply(c, "", out, err)
 }
 
-func (a *ClashController) saveWeights(c *gin.Context) {
+func (a *handlers) saveWeights(c *gin.Context) {
 	var body struct {
 		Items []allocation.NodeWeightInput `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		jsonMsg(c, "invalid node weights", err)
+		a.reply(c, "invalid node weights", nil, err)
 		return
 	}
 	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
-		jsonMsg(c, "load clash catalog", err)
+		a.reply(c, "load clash catalog", nil, err)
 		return
 	}
 	if err := allocation.SaveNodeWeights(cat, body.Items); err != nil {
-		jsonMsg(c, "save node weights", err)
+		a.reply(c, "save node weights", nil, err)
 		return
 	}
 	policy.TriggerSync()
 	out, err := policy.BuildOverview(cat)
-	jsonObj(c, out, err)
+	a.reply(c, "", out, err)
 }
 
-func (a *ClashController) clientRatio(c *gin.Context) {
+func (a *handlers) clientRatio(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		jsonMsg(c, "invalid client id", err)
+		a.reply(c, "invalid client id", nil, err)
 		return
 	}
 	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
-		jsonMsg(c, "load clash catalog", err)
+		a.reply(c, "load clash catalog", nil, err)
 		return
 	}
 	view, err := policy.LoadClientView(cat, id)
-	jsonObj(c, view, err)
+	a.reply(c, "", view, err)
 }
 
-func (a *ClashController) saveClientRatio(c *gin.Context) {
+func (a *handlers) saveClientRatio(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		jsonMsg(c, "invalid client id", err)
+		a.reply(c, "invalid client id", nil, err)
 		return
 	}
 	var body struct {
@@ -93,76 +92,76 @@ func (a *ClashController) saveClientRatio(c *gin.Context) {
 		Limits    map[string]int64 `json:"limits"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		jsonMsg(c, "invalid client ratio", err)
+		a.reply(c, "invalid client ratio", nil, err)
 		return
 	}
 	cat, err := policy.LoadCatalogOrError()
 	if err != nil {
-		jsonMsg(c, "load clash catalog", err)
+		a.reply(c, "load clash catalog", nil, err)
 		return
 	}
 	if err := allocation.SaveClientRatio(cat, id, body.Mode, body.Weights, body.Limits, body.ResetMode); err != nil {
-		jsonMsg(c, "save client ratio", err)
+		a.reply(c, "save client ratio", nil, err)
 		return
 	}
 	policy.TriggerSync()
 	view, err := policy.LoadClientView(cat, id)
-	jsonObj(c, view, err)
+	a.reply(c, "", view, err)
 }
 
-func (a *ClashController) resetPolicy(c *gin.Context) {
+func (a *handlers) resetPolicy(c *gin.Context) {
 	var body struct {
 		NodeKey  string `json:"nodeKey"`
 		ClientID int    `json:"clientId"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		jsonMsg(c, "invalid reset request", err)
+		a.reply(c, "invalid reset request", nil, err)
 		return
 	}
 	if err := policy.RequestReset(body.NodeKey, body.ClientID); err != nil {
-		jsonMsg(c, "reset policy", err)
+		a.reply(c, "reset policy", nil, err)
 		return
 	}
-	jsonObj(c, gin.H{"resetPending": true}, nil)
+	a.reply(c, "", gin.H{"resetPending": true}, nil)
 }
 
-func (a *ClashController) sync(c *gin.Context) {
+func (a *handlers) sync(c *gin.Context) {
 	rt := policy.GetRuntime()
 	if rt == nil {
-		jsonMsg(c, "clash runtime is not configured", nil)
+		a.reply(c, "clash runtime is not configured", nil, nil)
 		return
 	}
 	rt.SyncOnce(c.Request.Context())
-	jsonObj(c, rt.SyncStatus(), nil)
+	a.reply(c, "", rt.SyncStatus(), nil)
 }
 
-func (a *ClashController) applyPolicy(c *gin.Context) {
+func (a *handlers) applyPolicy(c *gin.Context) {
 	var req policy.ApplyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonMsg(c, "invalid policy", err)
+		a.reply(c, "invalid policy", nil, err)
 		return
 	}
 	rt := policy.GetRuntime()
 	if rt == nil {
-		jsonMsg(c, "clash runtime is not configured", nil)
+		a.reply(c, "clash runtime is not configured", nil, nil)
 		return
 	}
 	report, err := rt.Apply(req)
-	jsonMsgObj(c, "", report, err)
+	a.reply(c, "", report, err)
 }
 
-func (a *ClashController) reportPolicy(c *gin.Context) {
+func (a *handlers) reportPolicy(c *gin.Context) {
 	masterGuid := c.Query("masterGuid")
 	id, err := strconv.Atoi(c.Query("clientId"))
 	if err != nil || masterGuid == "" || id <= 0 {
-		jsonMsg(c, "invalid report query", err)
+		a.reply(c, "invalid report query", nil, err)
 		return
 	}
 	rt := policy.GetRuntime()
 	if rt == nil {
-		jsonMsg(c, "clash runtime is not configured", nil)
+		a.reply(c, "clash runtime is not configured", nil, nil)
 		return
 	}
 	report, err := rt.Report(masterGuid, id)
-	jsonObj(c, report, err)
+	a.reply(c, "", report, err)
 }

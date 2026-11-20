@@ -1,4 +1,4 @@
-package controller
+package httpapi
 
 import (
 	"errors"
@@ -25,15 +25,15 @@ func requireClashFormat(c *gin.Context) {
 	c.Next()
 }
 
-func registerRuleSets(admin *gin.RouterGroup) {
+func (a *handlers) registerRuleSets(admin *gin.RouterGroup) {
 	templates := admin.Group("/templates", requireClashFormat)
-	templates.GET("", func(c *gin.Context) { rows, err := subscription.Templates(); jsonObj(c, rows, err) })
+	templates.GET("", func(c *gin.Context) { rows, err := subscription.Templates(); a.reply(c, "", rows, err) })
 	templates.DELETE("/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 		if err == nil {
 			err = subscription.DeleteTemplate(uint(id))
 		}
-		jsonObj(c, nil, err)
+		a.reply(c, "", nil, err)
 	})
 	templates.POST("", func(c *gin.Context) {
 		var row subscription.YAMLTemplate
@@ -41,33 +41,33 @@ func registerRuleSets(admin *gin.RouterGroup) {
 		if err == nil {
 			err = subscription.SaveTemplate(&row)
 		}
-		jsonObj(c, row, err)
+		a.reply(c, "", row, err)
 	})
 	g := admin.Group("/rulesets", requireClashFormat)
-	g.GET("", func(c *gin.Context) { rows, err := subscription.RuleSets(); jsonObj(c, rows, err) })
+	g.GET("", func(c *gin.Context) { rows, err := subscription.RuleSets(); a.reply(c, "", rows, err) })
 	g.POST("", func(c *gin.Context) {
 		var row subscription.RuleSet
 		err := c.ShouldBindJSON(&row)
 		if err == nil {
 			err = subscription.SaveRuleSet(&row)
 		}
-		jsonObj(c, row, err)
+		a.reply(c, "", row, err)
 	})
 	g.DELETE("/:id", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 		if err == nil {
 			err = subscription.DeleteRuleSet(uint(id))
 		}
-		jsonObj(c, nil, err)
+		a.reply(c, "", nil, err)
 	})
 	g.POST("/import", func(c *gin.Context) {
 		var in struct{ Content string }
 		if err := c.ShouldBindJSON(&in); err != nil {
-			jsonObj(c, nil, err)
+			a.reply(c, "", nil, err)
 			return
 		}
 		rules, err := subscription.ImportRules(in.Content)
-		jsonObj(c, rules, err)
+		a.reply(c, "", rules, err)
 	})
 }
 

@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/httpapi"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
-
-	"github.com/gin-gonic/gin"
 )
 
 // APIController handles the main API routes for the 3x-ui panel, including inbounds and server management.
@@ -236,7 +236,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	// Project load-balancing gateway policy. Admin/session routes plus the
 	// child-side apply/report endpoints used by a master's node token.
-	NewClashController(api)
+	httpapi.RegisterAdmin(api, jsonMsgObj)
 	// Project: passkey management shares the existing authenticated admin API group.
 	registerPasskeyManagement(api)
 

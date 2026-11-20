@@ -881,14 +881,17 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 }
 
 func (a *SUBController) subClashs(c *gin.Context) {
-	row, err := subscription.ProfileByToken(c.Param("subid"))
-	if err == nil {
-		a.serveProfile(c, row)
-		return
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	profile, direct, err := subscription.ResolveLink(c.Param("subid"), c.Request.UserAgent())
+	if err != nil {
 		writeSubError(c, err)
 		return
+	}
+	if direct {
+		a.serveProfile(c, *profile)
+		return
+	}
+	if profile != nil {
+		c.Set("clashProfile", *profile)
 	}
 	a.subClash(c, false)
 }
@@ -924,17 +927,6 @@ func (a *SUBController) subClashLegacy(c *gin.Context) {
 }
 
 func (a *SUBController) subClash(c *gin.Context, legacy bool) {
-	if !legacy {
-		profile, err := subscription.MatchClientProfile(c.Param("subid"), c.Request.UserAgent())
-		if err != nil {
-			writeSubError(c, err)
-			return
-		}
-		if profile != nil {
-			c.Set("clashProfile", *profile)
-		}
-	}
-
 	if strings.EqualFold(c.Query("view"), "raw") {
 		if !a.enforceHwid(c) {
 			return

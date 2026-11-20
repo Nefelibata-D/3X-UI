@@ -1,4 +1,4 @@
-package controller
+package httpapi
 
 import (
 	"errors"
@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-yaml"
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -14,23 +13,22 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
-func (a *ClashController) clientSubscription(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonObj(c, nil, err)
+func (a *handlers) clientSubscription(c *gin.Context) {
+	id, ok := a.clientID(c)
+	if !ok {
 		return
 	}
 	row, err := subscription.ClientSubscription(id)
-	jsonObj(c, row, err)
+	a.reply(c, "", row, err)
 }
 
-func (a *ClashController) saveClientSubscription(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonObj(c, nil, err)
+func (a *handlers) saveClientSubscription(c *gin.Context) {
+	id, ok := a.clientID(c)
+	if !ok {
 		return
 	}
 	var row subscription.SubscriptionBinding
+	var err error
 	if err = c.ShouldBindJSON(&row); err == nil {
 		if row.TemplateID != 0 {
 			_, err = projectSubscription(c, id, &row)
@@ -39,10 +37,10 @@ func (a *ClashController) saveClientSubscription(c *gin.Context) {
 			err = subscription.SaveClientSubscription(id, &row)
 		}
 	}
-	jsonObj(c, row, err)
+	a.reply(c, "", row, err)
 }
 
-func projectSubscription(c *gin.Context, id int, binding *subscription.SubscriptionBinding) (string, error) {
+func projectSubscription(c *gin.Context, id int, binding *subscription.SubscriptionBinding) (any, error) {
 	var client model.ClientRecord
 	if err := database.GetDB().First(&client, id).Error; err != nil {
 		return "", err
@@ -60,58 +58,66 @@ func projectSubscription(c *gin.Context, id int, binding *subscription.Subscript
 		host = name
 	}
 	renderer := sub.NewSubClashService(false, "", false, sub.NewSubService(remark))
+	if binding == nil {
+		return renderer.ProjectProxies(client.SubID, host, c.Query("context") == "1")
+	}
 	return renderer.ProjectSubscription(client.SubID, host, binding, c.Query("context") == "1")
 }
-func (a *ClashController) subscriptionProxies(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonObj(c, nil, err)
+
+func (a *handlers) subscriptionProxies(c *gin.Context) {
+	id, ok := a.clientID(c)
+	if !ok {
 		return
 	}
-	text, err := projectSubscription(c, id, nil)
-	var proxies any
-	if err == nil {
-		err = yaml.Unmarshal([]byte(text), &proxies)
-	}
-	jsonObj(c, proxies, err)
+	proxies, err := projectSubscription(c, id, nil)
+	a.reply(c, "", proxies, err)
 }
-func (a *ClashController) validateSubscription(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonObj(c, nil, err)
+
+func (a *handlers) validateSubscription(c *gin.Context) {
+	id, ok := a.clientID(c)
+	if !ok {
 		return
 	}
 	var binding subscription.SubscriptionBinding
-	var rendered string
+	var err error
+	var rendered any
 	if err = c.ShouldBindJSON(&binding); err == nil {
 		rendered, err = projectSubscription(c, id, &binding)
 	}
-	jsonObj(c, rendered, err)
+	a.reply(c, "", rendered, err)
 }
 
-func (a *ClashController) clientProfiles(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonObj(c, nil, err)
+func (a *handlers) clientProfiles(c *gin.Context) {
+	id, ok := a.clientID(c)
+	if !ok {
 		return
 	}
 	rows, err := subscription.ClientProfiles(id)
-	jsonObj(c, rows, err)
+	a.reply(c, "", rows, err)
 }
-func (a *ClashController) changeProfile(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		jsonObj(c, nil, err)
+
+func (a *handlers) changeProfile(c *gin.Context) {
+	id, ok := a.clientID(c)
+	if !ok {
 		return
 	}
+	var err error
 	var change subscription.ProfileChange
 	if err = c.ShouldBindJSON(&change); err == nil && !change.Delete && change.TemplateID != 0 {
 		_, err = projectSubscription(c, id, &change.SubscriptionBinding)
 	}
 	if err != nil {
-		jsonObj(c, nil, err)
+		a.reply(c, "", nil, err)
 		return
 	}
 	row, err := subscription.ChangeProfile(id, change)
-	jsonObj(c, row, err)
+	a.reply(c, "", row, err)
+}
+
+func (a *handlers) clientID(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		a.reply(c, "", nil, err)
+	}
+	return id, err == nil
 }

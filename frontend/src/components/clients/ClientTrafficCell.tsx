@@ -1,3 +1,4 @@
+import { displayTrafficBytes } from '@/lib/clash/traffic';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Popover, Progress } from 'antd';
@@ -39,9 +40,8 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
     [up, down, total, enabled, trafficDiff, isDark],
   );
 
-  const factor = serverView ? 2 : 1;
-  const shownUsed = factor * display.used;
-  const shownLimit = factor * total;
+  const shownUsed = displayTrafficBytes(display.used, serverView);
+  const shownLimit = displayTrafficBytes(total, serverView);
   const popover = (
     <table className="client-traffic-popover">
       <tbody>
@@ -51,11 +51,11 @@ const ClientTrafficCell = memo(function ClientTrafficCell({
           <td>↓</td>
           <td>{SizeFormatter.sizeFormat(down)}</td>
         </tr>
-        <tr><td colSpan={2}>服务器统计</td><td colSpan={2}>{SizeFormatter.sizeFormat(2 * display.used)}</td></tr>
+        <tr><td colSpan={2}>服务器统计</td><td colSpan={2}>{SizeFormatter.sizeFormat(displayTrafficBytes(display.used, true))}</td></tr>
         {!display.isUnlimited && (
           <tr>
             <td colSpan={2}>{t('remained')}</td>
-            <td colSpan={2}>{SizeFormatter.sizeFormat(factor * display.remaining)}</td>
+            <td colSpan={2}>{SizeFormatter.sizeFormat(displayTrafficBytes(display.remaining, serverView))}</td>
           </tr>
         )}
       </tbody>

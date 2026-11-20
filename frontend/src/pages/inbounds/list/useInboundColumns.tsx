@@ -1,3 +1,4 @@
+import { displayTrafficBytes } from '@/lib/clash/traffic';
 import { useMemo, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Popover, Switch, Tag, Tooltip, type TableColumnType } from 'antd';
@@ -59,7 +60,6 @@ export function useInboundColumns({
   onSwitchEnable,
 }: UseInboundColumnsParams): TableColumnType<DBInboundRecord>[] {
   const { t } = useTranslation();
-  const factor = serverView ? 2 : 1;
   const { datepicker } = useDatepicker();
 
   return useMemo(() => {
@@ -408,11 +408,11 @@ export function useInboundColumns({
                     <td>↑ {SizeFormatter.sizeFormat(record.up)}</td>
                     <td>↓ {SizeFormatter.sizeFormat(record.down)}</td>
                   </tr>
-                  <tr><td>服务器统计</td><td>{SizeFormatter.sizeFormat(2 * (record.up + record.down))}</td></tr>
+                  <tr><td>服务器统计</td><td>{SizeFormatter.sizeFormat(displayTrafficBytes(record.up + record.down, true))}</td></tr>
                   {record.total > 0 && record.up + record.down < record.total && (
                     <tr>
                       <td>{t('remained')}</td>
-                      <td>{SizeFormatter.sizeFormat(factor * (record.total - record.up - record.down))}</td>
+                      <td>{SizeFormatter.sizeFormat(displayTrafficBytes(record.total - record.up - record.down, serverView))}</td>
                     </tr>
                   )}
                 </tbody>
@@ -420,8 +420,8 @@ export function useInboundColumns({
             }
           >
             <Tag color={ColorUtils.usageColor(record.up + record.down, trafficDiff, record.total)}>
-              {SizeFormatter.sizeFormat(factor * (record.up + record.down))} /{' '}
-              {record.total > 0 ? SizeFormatter.sizeFormat(factor * (record.total)) : <InfinityIcon />}
+              {SizeFormatter.sizeFormat(displayTrafficBytes(record.up + record.down, serverView))} /{' '}
+              {record.total > 0 ? SizeFormatter.sizeFormat(displayTrafficBytes(record.total, serverView)) : <InfinityIcon />}
             </Tag>
           </Popover>
         ),
@@ -485,7 +485,7 @@ export function useInboundColumns({
     subEnable,
     expireDiff,
     trafficDiff,
-    factor,
+    serverView,
     datepicker,
     onRowAction,
     onSwitchEnable,

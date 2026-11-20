@@ -66,7 +66,10 @@ func ClientProfiles(clientID int) ([]Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	var list []Profile
+	list, err := profiles(db, owner)
+	if err != nil || !slices.ContainsFunc(list, func(p Profile) bool { return p.Token == nil }) {
+		return list, err
+	}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		list, err = profiles(tx, owner)
 		if err != nil {
@@ -245,4 +248,17 @@ func MatchClientProfile(owner, userAgent string) (*SubscriptionBinding, error) {
 		}
 	}
 	return nil, nil
+}
+
+// ResolveLink checks direct profile tokens before selecting a user's subscription by UA.
+func ResolveLink(id, ua string) (*SubscriptionBinding, bool, error) {
+	row, err := ProfileByToken(id)
+	if err == nil {
+		return &row, true, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+	profile, err := MatchClientProfile(id, ua)
+	return profile, false, err
 }

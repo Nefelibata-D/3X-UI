@@ -113,7 +113,7 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 	inboundSvc.resetMtprotoClientQuotas(cleanEmails)
 	inboundSvc.deliverNodeResetsNow(resetNodes)
 	// Project: keep node ledgers in sync with the upstream bulk reset.
-	if err := requestClashTrafficResets(cleanEmails); err != nil {
+	if err := policy.RequestTrafficResetsByEmail(cleanEmails, sqlInChunk); err != nil {
 		return affected, err
 	}
 	// After the zeroing, as in ResetTrafficByEmail: enabling a still-depleted
@@ -146,7 +146,7 @@ func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id in
 	inboundSvc.resetMtprotoClientQuotas(resetEmails)
 	inboundSvc.deliverNodeResetsNow(resetNodes)
 	// Project: reset the same clients' node ledgers before re-enabling them.
-	if err := requestClashTrafficResets(resetEmails); err != nil {
+	if err := policy.RequestTrafficResetsByEmail(resetEmails, sqlInChunk); err != nil {
 		return false, err
 	}
 	needRestart := false
@@ -270,7 +270,7 @@ func (s *ClientService) ResetAllTraffics() (bool, error) {
 	inbounds.resetAllMtprotoQuotas()
 	inbounds.deliverNodeResetsNow(resetNodes)
 	// Project: the explicit reset-all operation includes every node ledger.
-	if err := requestAllClashTrafficResets(); err != nil {
+	if err := policy.RequestAllTrafficResets(); err != nil {
 		return false, err
 	}
 	needRestart := false

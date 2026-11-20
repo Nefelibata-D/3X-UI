@@ -3,10 +3,6 @@
 package web
 
 import (
-	policy "github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
-)
-
-import (
 	"context"
 	"crypto/tls"
 	"embed"
@@ -24,6 +20,9 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgkern"
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/httpapi"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/policy"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -256,8 +255,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	s.panel = controller.NewXUIController(g)
 	s.api = controller.NewAPIController(g)
 	// Project: public status and published rules use their own routes, outside the admin API.
-	controller.RegisterClashStatus(g)
-	controller.RegisterPublishedRules(g)
+	subscription.RegisterPublicSubscriptionRoutes(g)
+	httpapi.RegisterPublishedRules(g)
 
 	// Initialize WebSocket hub
 	s.wsHub = websocket.NewHub()

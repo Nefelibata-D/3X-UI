@@ -68,9 +68,9 @@ func ComposeSubscription(base string, binding SubscriptionBinding) (map[string]a
 		if _, ok := blacklist.([]any); blacklist != nil && !ok {
 			return nil, errors.New("黑名单必须是列表")
 		}
-		if blacklist != nil {
-			config["site-blacklist"] = blacklist
-		}
+	}
+	if blacklist, ok := config["site-blacklist"].([]any); ok && len(blacklist) == 0 {
+		delete(config, "site-blacklist")
 	}
 	for _, key := range []string{"rules", "proxy-groups"} {
 		original, ok := config[key].([]any)

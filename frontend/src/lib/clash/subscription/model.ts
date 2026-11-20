@@ -105,6 +105,8 @@ export function composeSubscription(base: string, binding: Subscription) {
     }
     config = setEntries(config, section, result);
   }
+  const blacklist = config['site-blacklist'];
+  if (Array.isArray(blacklist) && !blacklist.length) delete config['site-blacklist'];
   return stringify(config);
 }
 

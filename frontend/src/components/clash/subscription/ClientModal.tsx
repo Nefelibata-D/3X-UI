@@ -1,13 +1,16 @@
 import { useRef, useState } from 'react';
 import { Alert, Button, ConfigProvider, Dropdown, Modal, Spin, Tabs, message, theme } from 'antd';
-import { EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, PlusOutlined, UndoOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { keys } from '@/api/queryKeys';
 import { useClashSubscription } from '@/api/queries/clash/subscription';
 import { changeProfile } from '@/lib/clash/subscription/api';
 import { RandomUtil } from '@/utils';
-import { emptySubscription, type Profile, type Subscription } from '@/schemas/clash/subscription';
-import SubscriptionEditor, { type SubscriptionClientProps as Props } from './SubscriptionEditor';
+import { emptySubscription, type Profile } from '@/schemas/clash/subscription';
+import SubscriptionEditor, {
+  type EditorHandle,
+  type SubscriptionClientProps as Props,
+} from './SubscriptionEditor';
 import './Templates.css';
 import './ClientModal.css';
 
@@ -41,9 +44,19 @@ function ProfileTabs({
   onClose,
   data,
 }: Props & { data: Data; clientId: number }) {
-  const [profiles, setProfiles] = useState<DraftProfile[]>(() => data.profiles.length ? data.profiles : [{
-    ...structuredClone(emptySubscription), key: 'default', name: '新订阅', token: RandomUtil.randomSeq(20), isNew: true,
-  }]);
+  const [profiles, setProfiles] = useState<DraftProfile[]>(() =>
+    data.profiles.length
+      ? data.profiles
+      : [
+          {
+            ...structuredClone(emptySubscription),
+            key: 'default',
+            name: '新订阅',
+            token: RandomUtil.randomSeq(20),
+            isNew: true,
+          },
+        ],
+  );
   const selectionKey = 'clash-subscription-profile:' + clientId;
   const [active, setActive] = useState(() => {
     const previous = sessionStorage.getItem(selectionKey);
@@ -57,8 +70,26 @@ function ProfileTabs({
   }
   const [editing, setEditing] = useState('');
   const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const cache = useQueryClient();
-  const reader = useRef<{ read: () => Subscription | undefined }>(null);
+  const readers = useRef(new Map<string, EditorHandle>());
+  const originals = useRef(new Map(profiles.map((p) => [p.key, p])));
+  const [dirtyEditors, setDirtyEditors] = useState<Record<string, boolean>>({});
+  const [versions, setVersions] = useState<Record<string, number>>({});
+  function dirty(p: DraftProfile) {
+    return (
+      p.isNew ||
+      dirtyEditors[p.key] ||
+      p.pendingToken ||
+      originals.current.get(p.key)?.name !== p.name
+    );
+  }
+  function restore(p: DraftProfile) {
+    const original = originals.current.get(p.key)!;
+    setProfiles((all) => all.map((item) => (item.key === p.key ? original : item)));
+    setVersions((all) => ({ ...all, [p.key]: (all[p.key] ?? 0) + 1 }));
+    setDirtyEditors((all) => ({ ...all, [p.key]: false }));
+  }
   const draft = profiles.find((p) => p.key === active)!;
   const latest = profiles
     .filter((p) => !p.isNew)
@@ -71,24 +102,23 @@ function ProfileTabs({
   }
   function add(mode: string) {
     const source = mode === 'current' ? draft : latest;
-    const binding = mode === 'current' ? reader.current?.read() : source;
+    const binding = mode === 'current' ? readers.current.get(active)?.read() : source;
     if (!source || !binding) {
       void message.error('请先修复当前配置');
       return;
     }
     const key = RandomUtil.randomUUID();
-    setProfiles((all) => [
-      ...all,
-      {
-        ...structuredClone(binding),
-        key,
-        name: source.name + ' 副本',
-        token: RandomUtil.randomSeq(20),
-        updatedAt: 0,
-        lastSyncAt: 0,
-        isNew: true,
-      },
-    ]);
+    const copy: DraftProfile = {
+      ...structuredClone(binding),
+      key,
+      name: source.name + ' 副本',
+      token: RandomUtil.randomSeq(20),
+      updatedAt: 0,
+      lastSyncAt: 0,
+      isNew: true,
+    };
+    originals.current.set(key, copy);
+    setProfiles((all) => [...all, copy]);
     select(key);
   }
   const [removed, setRemoved] = useState<{ key: string; expected: number }[]>([]);
@@ -100,23 +130,55 @@ function ProfileTabs({
     setProfiles(rest);
     if (active === key) select(rest[0].key);
   }
-  async function save(p: DraftProfile, binding: Subscription, rotate: boolean) {
+  async function save() {
+    if (busy) return false;
     setBusy(true);
+    setSaveError('');
     try {
-      const result = await changeProfile(
-        clientId,
-        { ...binding, key: p.key, name: p.name, token: rotate ? p.pendingToken : p.token },
-        p.updatedAt,
-        p.isNew,
-        removed,
-      );
-      if (!result) throw Error('订阅保存失败');
-      sessionStorage.setItem(selectionKey, p.key);
-      setRemoved([]);
-      update(p.key, { ...result, isNew: false, pendingToken: undefined });
-      await cache.invalidateQueries({ queryKey: keys.clash.subscription(clientId) });
+      const targets = profiles.filter(dirty);
+      if (!targets.length && removed.length) targets.push(draft);
+      const prepared = [];
+      for (const profile of targets) {
+        try {
+          const editor = readers.current.get(profile.key);
+          if (!editor) throw Error('订阅编辑器尚未就绪');
+          const pending = await editor.prepare();
+          if (!pending) return false;
+          prepared.push({ profile, ...pending });
+        } catch (error) {
+          throw Error(profile.name + '：' + String(error));
+        }
+      }
+      let deletions = removed;
+      for (const { profile, binding, rotate } of prepared) {
+        try {
+          const result = await changeProfile(
+            clientId,
+            {
+              ...binding,
+              key: profile.key,
+              name: profile.name,
+              token: rotate ? profile.pendingToken : profile.token,
+            },
+            profile.updatedAt,
+            profile.isNew,
+            deletions,
+          );
+          deletions = [];
+          setRemoved([]);
+          originals.current.set(profile.key, result);
+          restore(result);
+        } catch (error) {
+          throw Error(profile.name + '：' + String(error));
+        }
+      }
+      return true;
+    } catch (error) {
+      setSaveError(String(error));
+      return false;
     } finally {
       setBusy(false);
+      await cache.invalidateQueries({ queryKey: keys.clash.subscription(clientId) });
     }
   }
   const plus = (
@@ -135,7 +197,7 @@ function ProfileTabs({
     </Dropdown>
   );
   return (
-    <>
+    <div inert={busy}>
       <Tabs
         className="profile-tabs"
         type="editable-card"
@@ -152,33 +214,50 @@ function ProfileTabs({
             !busy &&
             (p.isNew ? profiles.length > 1 : profiles.filter((item) => !item.isNew).length > 1),
           label: (
-            <span className="profile-label">
-              <span>
-                {p.name} {active === p.key && <EditOutlined />}
+            <span className={dirty(p) ? 'profile-unsaved' : undefined}>
+              <span className="profile-label">
+                <span>
+                  {p.name} {active === p.key && <EditOutlined />}
+                </span>
+                {active === p.key && (
+                  <input
+                    aria-label="订阅名称"
+                    key={versions[p.key] ?? 0}
+                    defaultValue={p.name}
+                    className={editing === p.key ? 'editing' : ''}
+                    onFocus={(e) => {
+                      setEditing(p.key);
+                      e.target.select();
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      const name = e.target.value.trim() || p.name;
+                      e.target.value = name;
+                      update(p.key, { name });
+                      setEditing('');
+                    }}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Escape') {
+                        e.currentTarget.value = p.name;
+                        e.currentTarget.blur();
+                      }
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                  />
+                )}
               </span>
-              {active === p.key && (
-                <input
-                  aria-label="订阅名称"
-                  defaultValue={p.name}
-                  className={editing === p.key ? 'editing' : ''}
-                  onFocus={(e) => {
-                    setEditing(p.key);
-                    e.target.select();
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  onBlur={(e) => {
-                    const name = e.target.value.trim() || p.name;
-                    e.target.value = name;
-                    update(p.key, { name });
-                    setEditing('');
-                  }}
-                  onKeyDown={(e) => {
+              {dirty(p) && (
+                <Button
+                  size="small"
+                  type="text"
+                  aria-label={'撤销 ' + p.name + ' 的未保存修改'}
+                  title="撤销此页签的未保存修改"
+                  icon={<UndoOutlined />}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
                     e.stopPropagation();
-                    if (e.key === 'Escape') {
-                      e.currentTarget.value = p.name;
-                      e.currentTarget.blur();
-                    }
-                    if (e.key === 'Enter') e.currentTarget.blur();
+                    restore(p);
                   }}
                 />
               )}
@@ -186,13 +265,15 @@ function ProfileTabs({
           ),
         }))}
       />
+      {saveError && <Alert type="error" title={saveError} />}
       {profiles
         .filter((p) => visited.has(p.key))
         .map((p) => {
           const token = p.pendingToken ?? p.token;
           const address =
             subscriptionURL &&
-            token && new URL(token, new URL(subscriptionURL, window.location.href)).href;
+            token &&
+            new URL(token, new URL(subscriptionURL, window.location.href)).href;
           return (
             <div key={p.key} hidden={active !== p.key}>
               <SubscriptionEditor
@@ -202,13 +283,23 @@ function ProfileTabs({
                 pendingRotation={!!p.pendingToken}
                 onRotate={() => update(p.key, { pendingToken: RandomUtil.randomSeq(20) })}
                 onClose={onClose}
-                draftRef={active === p.key ? reader : null}
+                key={versions[p.key] ?? 0}
+                profileName={p.name}
+                onDirty={(value) =>
+                  setDirtyEditors((all) =>
+                    !!all[p.key] === value ? all : { ...all, [p.key]: value },
+                  )
+                }
+                draftRef={(editor) => {
+                  if (editor) readers.current.set(p.key, editor);
+                  else readers.current.delete(p.key);
+                }}
                 data={{ ...data, binding: p }}
-                onSave={(binding, rotate) => save(p, binding, rotate)}
+                onSave={save}
               />
             </div>
           );
         })}
-    </>
+    </div>
   );
 }

@@ -202,3 +202,4 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.profile-unsaved { color: var(--ant-orange-6, #d46b08); }

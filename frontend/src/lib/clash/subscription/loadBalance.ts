@@ -223,4 +223,5 @@ export function clearLoadBalance(doc: Document, index: number, name: string) {
     const entry = entries.items[i];
     if (isMap(entry) && entry.get('group') === name) entries.delete(i);
   }
+  if (!entries.items.length) doc.delete('site-blacklist');
 }

@@ -1,9 +1,26 @@
 import type { ClientRecord } from '@/hooks/useClients';
-import { useImperativeHandle, useState } from 'react';
-import { Alert, Button, Checkbox, Select, Space, Tag, Typography, Form, Modal, Tabs, message, theme } from 'antd';
+import { useEffect, useImperativeHandle, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Select,
+  Space,
+  Tag,
+  Typography,
+  Form,
+  Modal,
+  Tabs,
+  message,
+  theme,
+} from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import type { useClashSubscription } from '@/api/queries/clash/subscription';
-import { defaultUAKeywords, emptySubscription, type Subscription } from '@/schemas/clash/subscription';
+import {
+  defaultUAKeywords,
+  emptySubscription,
+  type Subscription,
+} from '@/schemas/clash/subscription';
 import { useForm, useWatch } from 'react-hook-form';
 import { injectPublication, restorePublicationFields } from '@/lib/clash/subscription/publication';
 import { stringify } from 'yaml';
@@ -12,7 +29,13 @@ import SubscriptionEntries from '@/components/clash/subscription/SubscriptionEnt
 import TemplateWorkspace from './TemplateWorkspace';
 import { deleteSubscriptionGroup } from '@/lib/clash/subscription/deletion';
 import { validateTemplate } from '@/lib/clash/subscription/template/validation';
-import { composeSubscription, documentObject, entries, subscriptionFromYAML, type Section } from '@/lib/clash/subscription/model';
+import {
+  composeSubscription,
+  documentObject,
+  entries,
+  subscriptionFromYAML,
+  type Section,
+} from '@/lib/clash/subscription/model';
 
 export interface SubscriptionClientProps {
   client: ClientRecord;
@@ -20,21 +43,44 @@ export interface SubscriptionClientProps {
   onClose: () => void;
 }
 type Data = NonNullable<ReturnType<typeof useClashSubscription>['data']>;
-function SubscriptionLink({ url, pending = false, onRotate }: {
+function SubscriptionLink({
+  url,
+  pending = false,
+  onRotate,
+}: {
   url: string;
   pending?: boolean;
   onRotate?: () => void;
 }) {
   return (
     <div className="subscription-link-row">
-      <span className="subscription-link-address" aria-label={onRotate ? '独立订阅地址' : '通用订阅地址'} title={url} style={{ color: pending ? '#237804' : undefined }}>
+      <span
+        className="subscription-link-address"
+        aria-label={onRotate ? '独立订阅地址' : '通用订阅地址'}
+        title={url}
+        style={{ color: pending ? '#237804' : undefined }}
+      >
         {url}
       </span>
       {pending && <Tag color="green">待保存</Tag>}
       <Typography.Text copyable={{ text: url }} />
-      {onRotate && <Button aria-label="轮转链接" title="轮转链接" size="small" type="link" icon={<ReloadOutlined />} onClick={onRotate} />}
+      {onRotate && (
+        <Button
+          aria-label="轮转链接"
+          title="轮转链接"
+          size="small"
+          type="link"
+          icon={<ReloadOutlined />}
+          onClick={onRotate}
+        />
+      )}
     </div>
   );
+}
+
+export interface EditorHandle {
+  read: () => Subscription | undefined;
+  prepare: () => Promise<{ binding: Subscription; rotate: boolean } | undefined>;
 }
 
 export default function SubscriptionEditor({
@@ -46,13 +92,17 @@ export default function SubscriptionEditor({
   onClose,
   data,
   draftRef,
+  onDirty,
+  profileName,
   onSave,
 }: SubscriptionClientProps & {
   profileURL?: string;
   pendingRotation: boolean;
   onRotate: () => void;
-  draftRef: React.Ref<{ read: () => Subscription | undefined }>;
-  onSave: (draft: Subscription, rotate: boolean) => Promise<void>;
+  draftRef: React.Ref<EditorHandle>;
+  onDirty: (value: boolean) => void;
+  profileName: string;
+  onSave: () => Promise<boolean>;
   data: Omit<Data, 'profiles'> & { binding: Subscription };
 }) {
   const { token } = theme.useToken();
@@ -68,6 +118,7 @@ export default function SubscriptionEditor({
   const [yamlError, setYamlError] = useState('');
   useImperativeHandle(draftRef, () => ({
     read: () => (yamlError ? undefined : form.getValues()),
+    prepare,
   }));
   const changeBinding: typeof form.setValue = (...args) => {
     setYamlDraft(undefined);
@@ -224,53 +275,66 @@ export default function SubscriptionEditor({
       />
     );
   }
+  const dirty =
+    !!yamlError ||
+    !chainValid ||
+    Object.keys(emptySubscription).some((key) => {
+      const field = key as keyof Subscription;
+      return JSON.stringify(draft[field]) !== JSON.stringify(data.binding[field]);
+    });
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
+  async function prepare() {
+    if (yamlError || publicationError) throw new Error(yamlError || publicationError);
+    if (!chainValid) throw new Error('请先修复链式代理配置');
+    if (draft.templateId) {
+      if (!template) throw new Error('请选择有效模板');
+      if (compositionError) throw new Error(compositionError);
+    }
+
+    let rotate = false;
+    if (pendingRotation) {
+      const choice = await new Promise<'keep' | 'rotate' | 'cancel'>((resolve) => {
+        const dialog = modal.confirm({
+          centered: true,
+          title: '保存订阅 · ' + profileName,
+          content: '轮转后旧链接将失效。你也可以保留原链接，仅保存配置。',
+          okText: '保存并轮转',
+          cancelText: '取消',
+          onOk: () => {
+            resolve('rotate');
+          },
+          onCancel: () => {
+            resolve('cancel');
+          },
+          footer: (_, { CancelBtn, OkBtn }) => (
+            <div className="rotation-actions" style={{ gap: token.marginSM }}>
+              <CancelBtn />
+              <Button
+                style={{ background: token.colorWarning, color: token.colorText }}
+                onClick={() => {
+                  resolve('keep');
+                  dialog.destroy();
+                }}
+              >
+                保存但不轮转
+              </Button>
+              <OkBtn />
+            </div>
+          ),
+        });
+      });
+      if (choice === 'cancel') return;
+      rotate = choice === 'rotate';
+    }
+    return { binding: draft, rotate };
+  }
   async function save() {
     setSaving(true);
     setError('');
     try {
-      if (yamlError || publicationError) throw new Error(yamlError || publicationError);
-      if (!chainValid) throw new Error('请先修复链式代理配置');
-      if (draft.templateId) {
-        if (!template) throw new Error('请选择有效模板');
-        if (compositionError) throw new Error(compositionError);
-      }
-
-      let rotate = false;
-      if (pendingRotation) {
-        const choice = await new Promise<'keep' | 'rotate' | 'cancel'>((resolve) => {
-          const dialog = modal.confirm({
-            centered: true,
-            title: '保存订阅',
-            content: '轮转后旧链接将失效。你也可以保留原链接，仅保存配置。',
-            okText: '保存并轮转',
-            cancelText: '取消',
-            onOk: () => {
-              resolve('rotate');
-            },
-            onCancel: () => {
-              resolve('cancel');
-            },
-            footer: (_, { CancelBtn, OkBtn }) => (
-              <div className="rotation-actions" style={{ gap: token.marginSM }}>
-                <CancelBtn />
-                <Button
-                  style={{ background: token.colorWarning, color: token.colorText }}
-                  onClick={() => {
-                    resolve('keep');
-                    dialog.destroy();
-                  }}
-                >
-                  保存但不轮转
-                </Button>
-                <OkBtn />
-              </div>
-            ),
-          });
-        });
-        if (choice === 'cancel') return;
-        rotate = choice === 'rotate';
-      }
-      await onSave(draft, rotate);
+      if (!(await onSave())) return;
       void message.success('订阅配置已保存');
     } catch (e) {
       setError(String(e));

@@ -51,6 +51,7 @@ export function deleteSubscriptionGroup(base: string, binding: Subscription, nam
         blacklists.delete(i);
       }
     }
+    if (!blacklists.items.length) doc.delete('site-blacklist');
   }
   const labels: Record<string, string> = {
     rules: '路由',

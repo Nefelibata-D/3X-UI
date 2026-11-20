@@ -8,7 +8,7 @@ import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, message, Button, Input, Select, Space, Tag, Tooltip } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
-import { isMap, isSeq } from 'yaml';
+import { isMap, isSeq, visit } from 'yaml';
 import {
   blacklistRuleKinds,
   clearLoadBalance,
@@ -150,14 +150,25 @@ function BalanceContent({
     ...new Set([...providerNames, ...rules.filter((r) => r.blacklist).map((r) => r.name)]),
   ];
   const previousReferences = referencedRulesets(doc);
+  function serialize() {
+    const blacklist = doc.get('site-blacklist');
+    if (isSeq(blacklist))
+      visit(blacklist, {
+        Collection: (_, node) => {
+          node.flow = false;
+        },
+      });
+    return doc.toString();
+  }
   function commit() {
     removeReleasedRulesets(doc, previousReferences);
-    const problems = loadBalanceErrors(doc.toString());
+    const content = serialize();
+    const problems = loadBalanceErrors(content);
     if (problems.length) {
       void message.error(problems[0]);
       return false;
     }
-    onChange(doc.toString());
+    onChange(content);
     return true;
   }
   function changeGroup(from: string, to: string) {
@@ -217,8 +228,9 @@ function BalanceContent({
       if (!rules.items.length) entries.delete(i);
     }
     if (save) {
+      if (!entries.items.length) doc.delete('site-blacklist');
       removeReleasedRulesets(doc, previousReferences);
-      onChange(doc.toString());
+      onChange(serialize());
     }
   }
   function addGroup(name: string) {

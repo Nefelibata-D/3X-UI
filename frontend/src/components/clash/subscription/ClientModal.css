@@ -186,3 +186,19 @@
 .profile-tabs {
   padding-inline-end: 32px;
 }
+
+.subscription-link-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.subscription-link-row > :not(.subscription-link-address) {
+  flex: none;
+}
+.subscription-link-address {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

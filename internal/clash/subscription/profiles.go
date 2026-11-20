@@ -14,10 +14,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func defaultKeywords() []string {
-	return []string{"FlClash/v{x.y.z}", "clash-verge/v{x.y.z.a}", "Shadowrocket"}
-}
-
 type Profile struct {
 	Key string `json:"key"`
 	SubscriptionBinding
@@ -32,7 +28,7 @@ func profileOf(owner string, row SubscriptionBinding) Profile {
 		row.Name = "默认订阅"
 	}
 	if row.UAKeywords == nil {
-		row.UAKeywords = defaultKeywords()
+		row.UAKeywords = []string{}
 	}
 	return Profile{key, row}
 }
@@ -41,9 +37,6 @@ func profiles(db *gorm.DB, owner string) ([]Profile, error) {
 	var rows []SubscriptionBinding
 	if err := db.Where("owner = ? OR sub_id = ?", owner, owner).Order("sub_id").Find(&rows).Error; err != nil {
 		return nil, err
-	}
-	if len(rows) == 0 {
-		rows = append(rows, SubscriptionBinding{SubID: owner, Content: "{}"})
 	}
 	result := make([]Profile, 0, len(rows))
 	for _, row := range rows {
@@ -146,16 +139,14 @@ func ChangeProfile(clientID int, change ProfileChange) (Profile, error) {
 			if old != nil || change.Delete {
 				return errors.New("订阅已存在")
 			}
-			id, err := uuid.Parse(change.Key)
-			if err != nil || id.Version() != 4 || id.String() != change.Key {
-				return errors.New("无效的订阅编号")
-			}
-			row.SubID = "/profile/" + id.String()
-			if len(list) == 1 && list[0].Key == "default" {
-				initial := list[0].SubscriptionBinding
-				if err := tx.Omit("UpdatedAt").Clauses(clause.OnConflict{DoNothing: true}).Create(&initial).Error; err != nil {
-					return err
+			if change.Key == "default" && len(list) == 0 {
+				row.SubID = owner
+			} else {
+				id, err := uuid.Parse(change.Key)
+				if err != nil || id.Version() != 4 || id.String() != change.Key {
+					return errors.New("无效的订阅编号")
 				}
+				row.SubID = "/profile/" + id.String()
 			}
 		} else {
 			if old == nil || old.UpdatedAt != change.Expected {
@@ -240,10 +231,7 @@ func MatchClientProfile(owner, userAgent string) (*SubscriptionBinding, error) {
 		return nil, err
 	}
 	for _, p := range list {
-		if slices.ContainsFunc(p.UAKeywords, func(word string) bool { return matchesUserAgent(word, userAgent) }) {
-			if p.Key == "default" && p.Token == nil {
-				return nil, nil
-			}
+		if p.TemplateID != 0 && slices.ContainsFunc(p.UAKeywords, func(word string) bool { return matchesUserAgent(word, userAgent) }) {
 			return &p.SubscriptionBinding, nil
 		}
 	}

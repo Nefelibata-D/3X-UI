@@ -20,8 +20,25 @@ export interface SubscriptionClientProps {
   onClose: () => void;
 }
 type Data = NonNullable<ReturnType<typeof useClashSubscription>['data']>;
+function SubscriptionLink({ url, pending = false, onRotate }: {
+  url: string;
+  pending?: boolean;
+  onRotate?: () => void;
+}) {
+  return (
+    <div className="subscription-link-row">
+      <span className="subscription-link-address" aria-label={onRotate ? '独立订阅地址' : '通用订阅地址'} title={url} style={{ color: pending ? '#237804' : undefined }}>
+        {url}
+      </span>
+      {pending && <Tag color="green">待保存</Tag>}
+      <Typography.Text copyable={{ text: url }} />
+      {onRotate && <Button aria-label="轮转链接" title="轮转链接" size="small" type="link" icon={<ReloadOutlined />} onClick={onRotate} />}
+    </div>
+  );
+}
+
 export default function SubscriptionEditor({
-  generalURL,
+  profileURL,
   client,
   subscriptionURL,
   pendingRotation,
@@ -31,7 +48,7 @@ export default function SubscriptionEditor({
   draftRef,
   onSave,
 }: SubscriptionClientProps & {
-  generalURL?: string;
+  profileURL?: string;
   pendingRotation: boolean;
   onRotate: () => void;
   draftRef: React.Ref<{ read: () => Subscription | undefined }>;
@@ -295,36 +312,12 @@ export default function SubscriptionEditor({
       <Form.Item label="客户端">
         <Typography.Text>{client.email}</Typography.Text>
       </Form.Item>
-      <Form.Item label="独立订阅">
-        {subscriptionURL ? <Typography.Text copyable>{subscriptionURL}</Typography.Text> : '尚未启用'}
-      </Form.Item>
       <Form.Item label="通用订阅">
-        {generalURL ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span
-              aria-label="完整订阅地址"
-              title={generalURL}
-              style={{
-                color: pendingRotation ? '#237804' : undefined,
-                minWidth: 0,
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {generalURL}
-            </span>
-            {pendingRotation && <Tag color="green">待保存</Tag>}
-            <Typography.Text copyable={{ text: generalURL }} />
-            <Button
-              aria-label="轮转链接"
-              title="轮转链接"
-              size="small"
-              type="link"
-              icon={<ReloadOutlined />}
-              onClick={onRotate}
-            />
-          </div>
+        {subscriptionURL ? <SubscriptionLink url={subscriptionURL} /> : '尚未启用'}
+      </Form.Item>
+      <Form.Item label="独立订阅">
+        {profileURL ? (
+          <SubscriptionLink url={profileURL} pending={pendingRotation} onRotate={onRotate} />
         ) : (
           <Typography.Text type="secondary">尚未启用 Clash 订阅地址</Typography.Text>
         )}

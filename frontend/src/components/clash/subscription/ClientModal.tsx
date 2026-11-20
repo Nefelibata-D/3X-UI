@@ -6,7 +6,7 @@ import { keys } from '@/api/queryKeys';
 import { useClashSubscription } from '@/api/queries/clash/subscription';
 import { changeProfile } from '@/lib/clash/subscription/api';
 import { RandomUtil } from '@/utils';
-import { type Profile, type Subscription } from '@/schemas/clash/subscription';
+import { emptySubscription, type Profile, type Subscription } from '@/schemas/clash/subscription';
 import SubscriptionEditor, { type SubscriptionClientProps as Props } from './SubscriptionEditor';
 import './Templates.css';
 import './ClientModal.css';
@@ -41,7 +41,9 @@ function ProfileTabs({
   onClose,
   data,
 }: Props & { data: Data; clientId: number }) {
-  const [profiles, setProfiles] = useState<DraftProfile[]>(data.profiles);
+  const [profiles, setProfiles] = useState<DraftProfile[]>(() => data.profiles.length ? data.profiles : [{
+    ...structuredClone(emptySubscription), key: 'default', name: '新订阅', token: RandomUtil.randomSeq(20), isNew: true,
+  }]);
   const selectionKey = 'clash-subscription-profile:' + clientId;
   const [active, setActive] = useState(() => {
     const previous = sessionStorage.getItem(selectionKey);
@@ -196,7 +198,7 @@ function ProfileTabs({
               <SubscriptionEditor
                 client={client}
                 subscriptionURL={subscriptionURL}
-                generalURL={address || undefined}
+                profileURL={address || undefined}
                 pendingRotation={!!p.pendingToken}
                 onRotate={() => update(p.key, { pendingToken: RandomUtil.randomSeq(20) })}
                 onClose={onClose}

@@ -183,24 +183,14 @@ func RecordClientSubscriptionSync(subID, userAgent string, token *string) error 
 		return err
 	}
 	row, err := subscriptionByID(subID)
-	missing := errors.Is(err, gorm.ErrRecordNotFound)
-	if err != nil && !missing {
-		return err
-	}
-	words := row.UAKeywords
-	if words == nil {
-		words = defaultKeywords()
-	}
-
-	if !slices.ContainsFunc(words, func(w string) bool { return matchesUserAgent(w, userAgent) }) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}
-	if missing {
-		// Seed an untouched default only for a real client without managed profiles.
-		seed := db.Model(&model.ClientRecord{}).Select("sub_id, ?", "{}").Where("sub_id = ?", subID).Where("NOT EXISTS (?)", db.Model(&SubscriptionBinding{}).Select("1").Where("owner = ?", subID)).Limit(1)
-		if err := db.Exec("INSERT INTO clash_subscription_bindings (sub_id, content) SELECT * FROM (?) AS defaults WHERE true ON CONFLICT (sub_id) DO NOTHING", seed).Error; err != nil {
-			return err
-		}
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(row.UAKeywords, func(w string) bool { return matchesUserAgent(w, userAgent) }) {
+		return nil
 	}
 	query := db.Table((SubscriptionBinding{}).TableName()).Where("sub_id = ?", subID)
 	if token == nil {

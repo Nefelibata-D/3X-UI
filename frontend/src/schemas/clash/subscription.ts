@@ -7,10 +7,7 @@ const strings = z
   .nullish()
   .transform((v) => v ?? []);
 export const subscriptionSchema = z.object({
-  uaKeywords: z
-    .array(z.string())
-    .nullish()
-    .transform((v) => v ?? [...defaultUAKeywords]),
+  uaKeywords: strings,
   lastSyncAt: z.number().optional().default(0),
   updatedAt: z.number().optional().default(0),
   templateId: z.number(),

@@ -886,13 +886,15 @@ func (a *SUBController) subClashs(c *gin.Context) {
 		writeSubError(c, err)
 		return
 	}
+	if profile == nil || profile.TemplateID == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
 	if direct {
 		a.serveProfile(c, *profile)
 		return
 	}
-	if profile != nil {
-		c.Set("clashProfile", *profile)
-	}
+	c.Set("clashProfile", *profile)
 	a.subClash(c, false)
 }
 
@@ -904,6 +906,10 @@ func (a *SUBController) profileClash(c *gin.Context) {
 		} else {
 			writeSubError(c, err)
 		}
+		return
+	}
+	if row.TemplateID == 0 {
+		c.Status(http.StatusNoContent)
 		return
 	}
 	a.serveProfile(c, row)

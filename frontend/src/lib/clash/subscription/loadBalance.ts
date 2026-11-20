@@ -1,5 +1,5 @@
 import { parseBlacklistRule } from '@/lib/clash/subscription/blacklist';
-import { isMap, isSeq, parseDocument } from 'yaml';
+import { type Document, isMap, isSeq, parseDocument } from 'yaml';
 import { proxyTypes } from '@/lib/clash/subscription/template/schema';
 import { builtins } from '@/lib/clash/subscription/template/symbols';
 
@@ -211,4 +211,16 @@ export function loadBalanceErrors(
       }
     }
   return errors;
+}
+
+// Leaving load-balance releases the group's strategy and its site blacklist.
+export function clearLoadBalance(doc: Document, index: number, name: string) {
+  for (const field of ['strategy', 'hash-key', 'weighted-sticky'])
+    doc.deleteIn(['proxy-groups', index, field]);
+  const entries = doc.get('site-blacklist');
+  if (!isSeq(entries)) return;
+  for (let i = entries.items.length - 1; i >= 0; i--) {
+    const entry = entries.items[i];
+    if (isMap(entry) && entry.get('group') === name) entries.delete(i);
+  }
 }

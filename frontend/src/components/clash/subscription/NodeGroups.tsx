@@ -1,3 +1,4 @@
+import { clearLoadBalance } from '@/lib/clash/subscription/loadBalance';
 import { loadBalanceStrategies } from '@/lib/clash/subscription/template/strategies';
 import SortableTemplateRow, {
   SortableTemplateList,
@@ -16,6 +17,8 @@ import {
   builtins,
   groupTypes,
   replaceSymbol,
+  referencedRulesets,
+  removeReleasedRulesets,
   templateSymbols,
 } from '@/lib/clash/subscription/template/symbols';
 type Binding = { group: string; allNodes: boolean; nodes: string[] };
@@ -117,6 +120,16 @@ export default function NodeGroups({
         if (draft.remove) seq.delete(idx);
         else {
           doc.setIn(['proxy-groups', idx, 'proxies'], draft.members);
+          const previousType = doc.getIn(['proxy-groups', idx, 'type']);
+          if (previousType !== draft.type) {
+            if (previousType === 'load-balance') {
+              const references = referencedRulesets(doc);
+              clearLoadBalance(doc, idx, draft.key);
+              removeReleasedRulesets(doc, references);
+            }
+            if (previousType === 'url-test') doc.deleteIn(['proxy-groups', idx, 'tolerance']);
+            doc.setIn(['proxy-groups', idx, 'type'], draft.type);
+          }
           const path = ['proxy-groups', idx, 'strategy'];
           if (draft.type === 'load-balance' && draft.strategy !== (doc.getIn(path) ?? 'consistent-hashing')) {
             doc.setIn(path, draft.strategy);
@@ -342,7 +355,6 @@ export default function NodeGroups({
             类型
             <Select
               id={uid + '-type'}
-              disabled={!!draft.key}
               value={draft.type}
               options={groupTypes.map((value) => ({
                 value,

@@ -11,6 +11,7 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-de
 import { isMap, isSeq } from 'yaml';
 import {
   blacklistRuleKinds,
+  clearLoadBalance,
   loadBalanceErrors,
   loadBalanceModel,
   weightedGroupIssue,
@@ -238,13 +239,7 @@ function BalanceContent({
     const target = groups.find((g) => g.name === name);
     if (!target) return;
     doc.setIn(['proxy-groups', target.index, 'type'], 'select');
-    doc.deleteIn(['proxy-groups', target.index, 'strategy']);
-    doc.deleteIn(['proxy-groups', target.index, 'weighted-sticky']);
-    if (isSeq(entries))
-      for (let i = entries.items.length - 1; i >= 0; i--) {
-        const entry = entries.items[i];
-        if (isMap(entry) && entry.get('group') === name) entries.delete(i);
-      }
+    clearLoadBalance(doc, target.index, name);
     commit();
     select(undefined);
     setDraft(undefined);

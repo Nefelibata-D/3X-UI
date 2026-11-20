@@ -1,3 +1,4 @@
+import { loadBalanceStrategies } from './strategies';
 import upstream from 'meta-json-schema/schemas/meta-json-schema.json';
 import type { JSONSchema } from 'monaco-yaml';
 
@@ -12,7 +13,7 @@ const items = groups.items as JSONSchema;
 items.anyOf = items.anyOf!.slice(0, 4);
 const balanceProperties = (loadBalance.allOf![1] as JSONSchema).properties!;
 const strategy = balanceProperties.strategy as JSONSchema;
-strategy.enum = ['consistent-hashing', 'round-robin', 'sticky-sessions', 'weighted-sticky'];
+strategy.enum = [...loadBalanceStrategies];
 delete strategy.markdownEnumDescriptions;
 const strings: JSONSchema = { type: 'array', items: { type: 'string' } };
 balanceProperties['weighted-sticky'] = {

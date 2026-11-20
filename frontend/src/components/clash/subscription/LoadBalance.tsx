@@ -1,3 +1,4 @@
+import { loadBalanceStrategies } from '@/lib/clash/subscription/template/strategies';
 import {
   referencedRulesets,
   removeReleasedRulesets,
@@ -104,7 +105,7 @@ function BalanceContent({
   const [selected, select] = useState<string | undefined>(initialGroup);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [adding, setAdding] = useState(editing && !initialGroup);
-  const [newGroup, setNewGroup] = useState<string>();
+  const [newStrategy, setNewStrategy] = useState<string>('weighted-sticky');
   const [draft, setDraft] = useState<{
     proxies: string[];
     kind: string;
@@ -220,18 +221,18 @@ function BalanceContent({
     }
   }
   function addGroup(name: string) {
-    if (weightedIssue(name)) return;
+    if (newStrategy === 'weighted-sticky' && weightedIssue(name)) return;
     const target = groups.find((g) => g.name === name);
     if (!target) {
       void message.error('请选择节点组');
       return;
     }
     doc.setIn(['proxy-groups', target.index, 'type'], 'load-balance');
-    doc.setIn(['proxy-groups', target.index, 'strategy'], 'weighted-sticky');
+    doc.setIn(['proxy-groups', target.index, 'strategy'], newStrategy);
     commit();
     select(target.name);
     setAdding(false);
-    setNewGroup(undefined);
+
   }
   function removeGroup(name: string) {
     const target = groups.find((g) => g.name === name);
@@ -415,12 +416,7 @@ function BalanceContent({
                         aria-label="负载均衡类型"
                         style={{ width: '100%' }}
                         value={g.strategy || 'consistent-hashing'}
-                        options={[
-                          'consistent-hashing',
-                          'round-robin',
-                          'sticky-sessions',
-                          'weighted-sticky',
-                        ].map((value) => ({
+                        options={loadBalanceStrategies.map((value) => ({
                           value,
                           label: value,
                           disabled: value === 'weighted-sticky' && !!weightedIssue(g.name),
@@ -592,24 +588,20 @@ function BalanceContent({
             aria-label="负载均衡节点组"
             placeholder="选择节点组"
             style={{ width: '100%' }}
-            value={newGroup}
             options={groups
               .filter((g) => g.type !== 'load-balance')
-              .map((g) => groupOption(g.name, true))}
+              .map((g) => groupOption(g.name, newStrategy === 'weighted-sticky'))}
             optionRender={(option) => optionLabel(option.label, option.data.reason)}
-            onChange={(name) => {
-              setNewGroup(name);
-              addGroup(name);
-            }}
+            onChange={addGroup}
           />
           <label htmlFor={uid + '-strategy'}>负载均衡类型</label>
           <Select
             id={uid + '-strategy'}
             aria-label="负载均衡类型"
             style={{ width: '100%' }}
-            value="weighted-sticky"
-            disabled
-            options={[{ value: 'weighted-sticky' }]}
+            value={newStrategy}
+            onChange={setNewStrategy}
+            options={loadBalanceStrategies.map((value) => ({ value }))}
           />
           <strong>黑名单规则</strong>
           <Button block disabled icon={<PlusOutlined aria-hidden />}>

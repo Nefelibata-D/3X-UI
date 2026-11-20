@@ -1,3 +1,4 @@
+import { loadBalanceStrategies } from '@/lib/clash/subscription/template/strategies';
 import SortableTemplateRow, {
   SortableTemplateList,
 } from '@/components/clash/subscription/SortableTemplateRow';
@@ -62,6 +63,7 @@ export default function NodeGroups({
     key?: string;
     name: string;
     type: string;
+    strategy: string;
     members: string[];
     nodes: string[];
     allNodes: boolean;
@@ -79,6 +81,7 @@ export default function NodeGroups({
       nodes: bindings.find((b) => b.group === name)?.nodes ?? [],
       allNodes: bindings.find((b) => b.group === name)?.allNodes ?? false,
       members: isSeq(members) ? members.items.map(String) : [],
+      strategy: isMap(group) ? String(group.get('strategy') ?? 'consistent-hashing') : 'weighted-sticky',
       original: content,
       key: name,
       name: name ?? '',
@@ -112,7 +115,14 @@ export default function NodeGroups({
         const idx = seq.items.findIndex((g) => isMap(g) && g.get('name') === draft.key);
         if (idx < 0) throw Error('代理组不存在');
         if (draft.remove) seq.delete(idx);
-        else doc.setIn(['proxy-groups', idx, 'proxies'], draft.members);
+        else {
+          doc.setIn(['proxy-groups', idx, 'proxies'], draft.members);
+          const path = ['proxy-groups', idx, 'strategy'];
+          if (draft.type === 'load-balance' && draft.strategy !== (doc.getIn(path) ?? 'consistent-hashing')) {
+            doc.setIn(path, draft.strategy);
+            if (draft.strategy !== 'weighted-sticky') doc.deleteIn(['proxy-groups', idx, 'weighted-sticky']);
+          }
+        }
         if (draft.key !== replacement)
           replaceSymbol(templateSymbols(doc), 'proxy', draft.key, replacement);
       } else {
@@ -121,7 +131,7 @@ export default function NodeGroups({
             name,
             type: draft.type,
             proxies: draft.members,
-            ...(draft.type === 'load-balance' ? { strategy: 'weighted-sticky' } : {}),
+            ...(draft.type === 'load-balance' ? { strategy: draft.strategy } : {}),
           }),
         );
       }
@@ -340,6 +350,17 @@ export default function NodeGroups({
               onChange={(type) => setDraft({ ...draft, type })}
             />
           </label>
+          {draft.type === 'load-balance' && (
+            <label htmlFor={uid + '-strategy'}>
+              负载均衡策略
+              <Select
+                id={uid + '-strategy'}
+                value={draft.strategy}
+                options={loadBalanceStrategies.map((value) => ({ value }))}
+                onChange={(strategy) => setDraft({ ...draft, strategy })}
+              />
+            </label>
+          )}
         </>
       )}
       {editError && <Alert type="error" title={editError} />}

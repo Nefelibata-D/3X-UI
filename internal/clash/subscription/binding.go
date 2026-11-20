@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"errors"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -165,6 +166,17 @@ func validateBinding(db *gorm.DB, clientID int, row *SubscriptionBinding) error 
 	return nil
 }
 
+func matchesUserAgent(pattern, userAgent string) bool {
+	if pattern == "" {
+		return false
+	}
+	expression := regexp.QuoteMeta(strings.ToLower(pattern))
+	expression = strings.ReplaceAll(expression, regexp.QuoteMeta("{x.y.z}"), `[0-9]+\.[0-9]+\.[0-9]+`)
+	expression = strings.ReplaceAll(expression, regexp.QuoteMeta("{x.y.z.a}"), `[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+`)
+	matched, _ := regexp.MatchString("^"+expression, strings.ToLower(userAgent))
+	return matched
+}
+
 func RecordClientSubscriptionSync(subID, userAgent string, token *string) error {
 	db, err := storage.DB()
 	if err != nil {
@@ -179,8 +191,8 @@ func RecordClientSubscriptionSync(subID, userAgent string, token *string) error 
 	if words == nil {
 		words = defaultKeywords()
 	}
-	ua := strings.ToLower(userAgent)
-	if !slices.ContainsFunc(words, func(w string) bool { return w != "" && strings.Contains(ua, strings.ToLower(w)) }) {
+
+	if !slices.ContainsFunc(words, func(w string) bool { return matchesUserAgent(w, userAgent) }) {
 		return nil
 	}
 	if missing {

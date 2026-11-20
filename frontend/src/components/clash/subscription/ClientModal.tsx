@@ -81,9 +81,14 @@ function ProfileTabs({
   data,
 }: Props & { data: Data; clientId: number }) {
   const [profiles, setProfiles] = useState<DraftProfile[]>(data.profiles);
-  const [active, setActive] = useState(profiles[0].key);
+  const selectionKey = 'clash-subscription-profile:' + clientId;
+  const [active, setActive] = useState(() => {
+    const previous = sessionStorage.getItem(selectionKey);
+    return profiles.find((profile) => profile.key === previous)?.key ?? profiles[0].key;
+  });
   const [visited, setVisited] = useState(() => new Set([active]));
   function select(key: string) {
+    sessionStorage.setItem(selectionKey, key);
     setActive(key);
     setVisited((prev) => new Set(prev).add(key));
   }
@@ -115,7 +120,7 @@ function ProfileTabs({
         ...structuredClone(binding),
         key,
         name: source.name + ' 副本',
-        token: RandomUtil.randomUUID(),
+        token: RandomUtil.randomSeq(20),
         updatedAt: 0,
         lastSyncAt: 0,
         isNew: true,
@@ -123,23 +128,14 @@ function ProfileTabs({
     ]);
     select(key);
   }
-  async function remove(key: string) {
+  const [removed, setRemoved] = useState<{ key: string; expected: number }[]>([]);
+  function remove(key: string) {
     const profile = profiles.find((p) => p.key === key);
     if (!profile || profiles.length < 2 || busy) return;
-    setBusy(true);
-    try {
-      if (!profile.isNew) {
-        await changeProfile(clientId, profile, profile.updatedAt, false, true);
-        await cache.invalidateQueries({ queryKey: keys.clash.subscription(clientId) });
-      }
-      const rest = profiles.filter((p) => p.key !== key);
-      setProfiles(rest);
-      if (active === key) select(rest[0].key);
-    } catch (err) {
-      void message.error(String(err));
-    } finally {
-      setBusy(false);
-    }
+    if (!profile.isNew) setRemoved((list) => [...list, { key, expected: profile.updatedAt }]);
+    const rest = profiles.filter((p) => p.key !== key);
+    setProfiles(rest);
+    if (active === key) select(rest[0].key);
   }
   async function save(p: DraftProfile, binding: Subscription, rotate: boolean) {
     setBusy(true);
@@ -149,8 +145,11 @@ function ProfileTabs({
         { ...binding, key: p.key, name: p.name, token: rotate ? p.pendingToken : p.token },
         p.updatedAt,
         p.isNew,
+        removed,
       );
       if (!result) throw Error('订阅保存失败');
+      sessionStorage.setItem(selectionKey, p.key);
+      setRemoved([]);
       update(p.key, { ...result, isNew: false, pendingToken: undefined });
       await cache.invalidateQueries({ queryKey: keys.clash.subscription(clientId) });
     } finally {
@@ -230,16 +229,15 @@ function ProfileTabs({
           const token = p.pendingToken ?? p.token;
           const address =
             subscriptionURL &&
-            (token
-              ? new URL('p/' + token, new URL(subscriptionURL, window.location.href)).href
-              : subscriptionURL);
+            token && new URL(token, new URL(subscriptionURL, window.location.href)).href;
           return (
             <div key={p.key} hidden={active !== p.key}>
               <SubscriptionEditor
                 client={client}
-                subscriptionURL={address}
+                subscriptionURL={subscriptionURL}
+                generalURL={address || undefined}
                 pendingRotation={!!p.pendingToken}
-                onRotate={() => update(p.key, { pendingToken: RandomUtil.randomUUID() })}
+                onRotate={() => update(p.key, { pendingToken: RandomUtil.randomSeq(20) })}
                 onClose={onClose}
                 draftRef={active === p.key ? reader : null}
                 data={{ ...data, binding: p }}
@@ -253,6 +251,7 @@ function ProfileTabs({
 }
 
 function SubscriptionEditor({
+  generalURL,
   client,
   subscriptionURL,
   pendingRotation,
@@ -262,6 +261,7 @@ function SubscriptionEditor({
   draftRef,
   onSave,
 }: Props & {
+  generalURL?: string;
   pendingRotation: boolean;
   onRotate: () => void;
   draftRef: React.Ref<{ read: () => Subscription | undefined }>;
@@ -525,12 +525,15 @@ function SubscriptionEditor({
       <Form.Item label="客户端">
         <Typography.Text>{client.email}</Typography.Text>
       </Form.Item>
-      <Form.Item label="订阅地址">
-        {subscriptionURL ? (
+      <Form.Item label="独立订阅">
+        {subscriptionURL ? <Typography.Text copyable>{subscriptionURL}</Typography.Text> : '尚未启用'}
+      </Form.Item>
+      <Form.Item label="通用订阅">
+        {generalURL ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <span
               aria-label="完整订阅地址"
-              title={subscriptionURL}
+              title={generalURL}
               style={{
                 color: pendingRotation ? '#237804' : undefined,
                 minWidth: 0,
@@ -539,10 +542,10 @@ function SubscriptionEditor({
                 textOverflow: 'ellipsis',
               }}
             >
-              {subscriptionURL}
+              {generalURL}
             </span>
             {pendingRotation && <Tag color="green">待保存</Tag>}
-            <Typography.Text copyable={{ text: subscriptionURL }} />
+            <Typography.Text copyable={{ text: generalURL }} />
             <Button
               aria-label="轮转链接"
               title="轮转链接"
@@ -580,7 +583,7 @@ function SubscriptionEditor({
           aria-label="UA 关键词"
           value={draft.uaKeywords}
           placeholder="输入关键词后按 Enter"
-          options={['clash-verge', 'ShadowRocket'].map((value) => ({ value, label: value }))}
+          options={['FlClash/v{x.y.z}', 'clash-verge/v{x.y.z.a}', 'Shadowrocket'].map((value) => ({ value, label: value }))}
           onChange={(values: string[]) => {
             const unique = new Map<string, string>();
             for (const item of values) {

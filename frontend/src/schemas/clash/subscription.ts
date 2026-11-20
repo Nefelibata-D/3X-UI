@@ -8,7 +8,7 @@ export const subscriptionSchema = z.object({
   uaKeywords: z
     .array(z.string())
     .nullish()
-    .transform((v) => v ?? ['clash-verge', 'ShadowRocket']),
+    .transform((v) => v ?? ['FlClash/v{x.y.z}', 'clash-verge/v{x.y.z.a}', 'Shadowrocket']),
   lastSyncAt: z.number().optional().default(0),
   updatedAt: z.number().optional().default(0),
   templateId: z.number(),
@@ -34,7 +34,7 @@ export const subscriptionSchema = z.object({
 });
 export type Subscription = z.infer<typeof subscriptionSchema>;
 export const emptySubscription: Subscription = {
-  uaKeywords: ['clash-verge', 'ShadowRocket'],
+  uaKeywords: ['FlClash/v{x.y.z}', 'clash-verge/v{x.y.z.a}', 'Shadowrocket'],
   updatedAt: 0,
   lastSyncAt: 0,
   templateId: 0,

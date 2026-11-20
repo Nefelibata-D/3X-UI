@@ -1,7 +1,9 @@
 package subscription
 
 import (
+	"crypto/rand"
 	"errors"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -12,7 +14,9 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func defaultKeywords() []string { return []string{"clash-verge", "ShadowRocket"} }
+func defaultKeywords() []string {
+	return []string{"FlClash/v{x.y.z}", "clash-verge/v{x.y.z.a}", "Shadowrocket"}
+}
 
 type Profile struct {
 	Key string `json:"key"`
@@ -62,10 +66,39 @@ func ClientProfiles(clientID int) ([]Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return profiles(db, owner)
+	var list []Profile
+	err = db.Transaction(func(tx *gorm.DB) error {
+		list, err = profiles(tx, owner)
+		if err != nil {
+			return err
+		}
+		for _, p := range list {
+			if p.Token != nil {
+				continue
+			}
+			token := rand.Text()
+			row := p.SubscriptionBinding
+			row.Owner, row.Token = owner, &token
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "sub_id"}}, DoNothing: true}).Create(&row).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&SubscriptionBinding{}).Where("sub_id = ? AND token IS NULL", row.SubID).UpdateColumns(map[string]any{"owner": owner, "token": token}).Error; err != nil {
+				return err
+			}
+		}
+		list, err = profiles(tx, owner)
+		return err
+	})
+	return list, err
 }
 
+var shortToken = regexp.MustCompile(`^[a-zA-Z0-9]{20,32}$`)
+
 type ProfileChange struct {
+	Removed []struct {
+		Key      string `json:"key"`
+		Expected int64  `json:"expected"`
+	} `json:"removed"`
 	Profile
 	Create   bool  `json:"create"`
 	Delete   bool  `json:"delete"`
@@ -143,7 +176,7 @@ func ChangeProfile(clientID int, change ProfileChange) (Profile, error) {
 		}
 		if row.Token != nil {
 			id, err := uuid.Parse(*row.Token)
-			if err != nil || id.Version() != 4 || id.String() != *row.Token {
+			if !shortToken.MatchString(*row.Token) && (err != nil || id.Version() != 4 || id.String() != *row.Token) {
 				return errors.New("订阅链接无效")
 			}
 		}
@@ -158,28 +191,23 @@ func ChangeProfile(clientID int, change ProfileChange) (Profile, error) {
 		if old != nil {
 			row.LastSyncAt = old.LastSyncAt
 		}
+		for _, item := range change.Removed {
+			index := slices.IndexFunc(list, func(p Profile) bool { return p.Key == item.Key })
+			if index < 0 || item.Key == change.Key {
+				return errors.New("待删除订阅已变更，请重新打开")
+			}
+			result := tx.Where("sub_id = ? AND COALESCE(updated_at,0) = ?", list[index].SubID, item.Expected).Delete(&SubscriptionBinding{})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return errors.New("待删除订阅已变更，请重新打开")
+			}
+		}
 		saved = profileOf(owner, row)
 		return nil
 	})
 	return saved, err
-}
-
-// Existing URLs stay valid until their default profile is rotated or removed.
-func DefaultLinkActive(owner string) (bool, error) {
-	db, err := storage.DB()
-	if err != nil {
-		return false, err
-	}
-	if !db.Migrator().HasTable(&SubscriptionBinding{}) {
-		return true, nil
-	}
-	var n int64
-	err = db.Model(&SubscriptionBinding{}).Where("owner = ?", owner).Count(&n).Error
-	if err != nil || n == 0 {
-		return err == nil, err
-	}
-	err = db.Model(&SubscriptionBinding{}).Where("sub_id = ? AND token IS NULL", owner).Count(&n).Error
-	return n != 0, err
 }
 
 func ProfileByToken(token string) (SubscriptionBinding, error) {
@@ -188,6 +216,33 @@ func ProfileByToken(token string) (SubscriptionBinding, error) {
 		return SubscriptionBinding{}, err
 	}
 	var row SubscriptionBinding
+	if !db.Migrator().HasTable(&SubscriptionBinding{}) {
+		return row, gorm.ErrRecordNotFound
+	}
 	err = db.Where("token = ?", token).Take(&row).Error
 	return row, err
+}
+
+// MatchClientProfile uses the same ordering as the subscription tabs.
+func MatchClientProfile(owner, userAgent string) (*SubscriptionBinding, error) {
+	db, err := storage.DB()
+	if err != nil {
+		return nil, err
+	}
+	if !db.Migrator().HasTable(&SubscriptionBinding{}) {
+		return nil, nil
+	}
+	list, err := profiles(db, owner)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range list {
+		if slices.ContainsFunc(p.UAKeywords, func(word string) bool { return matchesUserAgent(word, userAgent) }) {
+			if p.Key == "default" && p.Token == nil {
+				return nil, nil
+			}
+			return &p.SubscriptionBinding, nil
+		}
+	}
+	return nil, nil
 }

@@ -881,6 +881,15 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 }
 
 func (a *SUBController) subClashs(c *gin.Context) {
+	row, err := subscription.ProfileByToken(c.Param("subid"))
+	if err == nil {
+		a.serveProfile(c, row)
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		writeSubError(c, err)
+		return
+	}
 	a.subClash(c, false)
 }
 
@@ -894,7 +903,11 @@ func (a *SUBController) profileClash(c *gin.Context) {
 		}
 		return
 	}
-	c.Params = append(c.Params, gin.Param{Key: "subid", Value: row.Owner})
+	a.serveProfile(c, row)
+}
+
+func (a *SUBController) serveProfile(c *gin.Context, row subscription.SubscriptionBinding) {
+	c.Params = gin.Params{{Key: "subid", Value: row.Owner}}
 	c.Set("clashProfile", row)
 	if !a.enforceHwid(c) {
 		return
@@ -911,14 +924,15 @@ func (a *SUBController) subClashLegacy(c *gin.Context) {
 }
 
 func (a *SUBController) subClash(c *gin.Context, legacy bool) {
-	ok, err := subscription.DefaultLinkActive(c.Param("subid"))
-	if err != nil {
-		writeSubError(c, err)
-		return
-	}
-	if !ok {
-		c.Status(http.StatusNotFound)
-		return
+	if !legacy {
+		profile, err := subscription.MatchClientProfile(c.Param("subid"), c.Request.UserAgent())
+		if err != nil {
+			writeSubError(c, err)
+			return
+		}
+		if profile != nil {
+			c.Set("clashProfile", *profile)
+		}
 	}
 
 	if strings.EqualFold(c.Query("view"), "raw") {

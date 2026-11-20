@@ -85,14 +85,14 @@ export async function changeProfile(
   profile: Profile,
   expected: number,
   create = false,
-  remove = false,
+  removed: { key: string; expected: number }[] = [],
 ) {
   const result = success(
     await HttpUtil.post(
       root + clientPath(id) + '/profiles',
-      { ...profile, expected, create, delete: remove },
+      { ...profile, expected, create, removed },
       json,
     ),
   );
-  return remove ? undefined : profileSchema.parse(result);
+  return profileSchema.parse(result);
 }

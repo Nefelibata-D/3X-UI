@@ -39,7 +39,7 @@ import { resolveExternalLinkExpiry } from '@/lib/clients/external-link';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import { useClientHwids } from '@/hooks/useClientHwids';
 import { useRawHostsQuery } from '@/api/queries/useRawHostsQuery';
-import { useClientQuotaWarning } from '@/api/queries/clash/allocation/useQuotaWarning';
+import { useClashClientRatioQuery } from '@/api/queries/clash/allocation/useClientRatio';
 import { DateTimePicker, SelectAllClearButtons } from '@/components/form';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import ClientHwidListModal from '@/components/clients/ClientHwidList';
@@ -284,11 +284,8 @@ export default function ClientFormModal({
   const email = useWatch({ control: methods.control, name: 'email' });
   const uuid = useWatch({ control: methods.control, name: 'uuid' });
   const trafficReset = useWatch({ control: methods.control, name: 'trafficReset' });
-  const totalGB = useWatch({ control: methods.control, name: 'totalGB' });
-  // Project: compare the upstream total cap with node allocations before submitting the base form.
-  const { conflict: totalNodeQuotaConflict, error: totalNodeQuotaError } = useClientQuotaWarning(
-    isEdit ? client?.id : undefined, gbToBytes(Number(totalGB) || 0),
-  );
+  const quotaQuery = useClashClientRatioQuery(isEdit ? client?.id : undefined);
+  const managedTotal = quotaQuery.data?.managedTotalBytes;
   const password = useWatch({ control: methods.control, name: 'password' });
   const subId = useWatch({ control: methods.control, name: 'subId' });
   const limitHwid = useWatch({ control: methods.control, name: 'limitHwid' });
@@ -987,15 +984,16 @@ export default function ClientFormModal({
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                          <FormField
-                            name="totalGB"
-                            label={t('pages.clients.totalGB')}
-                            tooltip={<>{t('pages.clients.totalGBDesc')}。额度按上传加下载计算；机房双向预算可除以二填写。</>}
-                            extra={totalNodeQuotaConflict ? <Typography.Text type="danger">{totalNodeQuotaError}</Typography.Text> : undefined}
-                            transform={{ output: (v) => Number(v) || 0 }}
-                          >
-                            <InputNumber min={0} step={1} status={totalNodeQuotaConflict ? 'error' : undefined} style={{ width: '100%' }} />
-                          </FormField>
+                          {managedTotal != null ? (
+                            <Form.Item label={t('pages.clients.totalGB')} extra="由负载均衡节点额度合计，在负载均衡页调整。">
+                              <InputNumber value={bytesToGB(managedTotal)} readOnly style={{ width: '100%' }} />
+                            </Form.Item>
+                          ) : (
+                            <FormField name="totalGB" label={t('pages.clients.totalGB')}
+                              tooltip={t('pages.clients.totalGBDesc')} transform={{ output: (v) => Number(v) || 0 }}>
+                              <InputNumber min={0} step={1} disabled={isEdit && !quotaQuery.data} style={{ width: '100%' }} />
+                            </FormField>
+                          )}
                         </Col>
                         <Col xs={24} md={12}>
                           <Form.Item

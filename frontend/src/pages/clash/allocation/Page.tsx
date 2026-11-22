@@ -452,7 +452,7 @@ export default function LoadBalancingPage() {
         </Tooltip>
       ),
       key: 'usage',
-      width: '15%',
+      width: 'calc(15% + 20px)',
       align: 'center',
       render: (_, policy) => {
         const total = policy.usageUp + policy.usageDown;
@@ -462,6 +462,7 @@ export default function LoadBalancingPage() {
           <Space direction="vertical" size={2} style={{ width: '100%' }}>
             {policy.budgetBytes > 0 ? (
               <Progress
+                showInfo={false}
                 percent={Number(percent.toFixed(1))}
                 size="small"
                 strokeColor={
@@ -475,10 +476,13 @@ export default function LoadBalancingPage() {
             ) : (
               <Typography.Text type="secondary">{'不限额度'}</Typography.Text>
             )}
-            <Typography.Text type="secondary">
-              {SizeFormatter.sizeFormat(total)} /{' '}
-              {policy.budgetBytes > 0 ? SizeFormatter.sizeFormat(policy.budgetBytes) : '∞'}
-            </Typography.Text>
+            <Space size={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+              <Typography.Text type="secondary">
+                {SizeFormatter.sizeFormat(total)} /{' '}
+                {policy.budgetBytes > 0 ? SizeFormatter.sizeFormat(policy.budgetBytes) : '∞'}
+              </Typography.Text>
+              {policy.budgetBytes > 0 && <Tag>{Number(percent.toFixed(1))}%</Tag>}
+            </Space>
           </Space>
         );
       },

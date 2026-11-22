@@ -83,6 +83,28 @@ balanceProperties['weighted-sticky'] = {
 templateSchema.allOf!.push({
   type: 'object',
   properties: {
+    'site-sticky': {
+      type: 'array',
+      title: '按规则设置节点绑定有效期',
+      defaultSnippets: [{
+        label: 'site-sticky 绑定规则',
+        body: [{ group: '${1:默认负载}', rules: ['DOMAIN,challenges.cloudflare.com,20,false'] }],
+      }],
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['group', 'rules'],
+        properties: {
+          group: { type: 'string', minLength: 1, description: '使用 weighted-sticky 策略的代理组名称' },
+          rules: {
+            ...strings,
+            minItems: 1,
+            description: '按顺序匹配首条规则。末两项为绑定有效秒数和是否按活动续期。',
+            items: { type: 'string', examples: ['DOMAIN,challenges.cloudflare.com,20,false'] },
+          },
+        },
+      },
+    },
     'site-blacklist': {
       type: 'array',
       title: '新绑定时避开的节点',

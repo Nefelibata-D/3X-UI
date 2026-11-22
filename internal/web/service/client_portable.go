@@ -323,7 +323,7 @@ func (s *ClientService) DeleteOrphans() (int, error) {
 			}
 		}
 		for _, batch := range chunkInts(ids, sqlInChunk) {
-			if e := tx.Where("id IN ?", batch).Delete(&model.ClientRecord{}).Error; e != nil {
+			if e := deleteClientRecords(tx, tx.Where("id IN ?", batch)); e != nil {
 				return e
 			}
 		}

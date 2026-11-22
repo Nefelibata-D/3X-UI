@@ -65,7 +65,7 @@ func (s *ClientService) ReapSyncOrphans() (int, error) {
 			if err := adjustGroupBaselinesForRemovedTraffic(tx, batch); err != nil {
 				return err
 			}
-			if err := tx.Where("email IN ?", batch).Delete(&model.ClientRecord{}).Error; err != nil {
+			if err := deleteClientRecords(tx, tx.Where("email IN ?", batch)); err != nil {
 				return err
 			}
 			if err := tx.Where("email IN ?", batch).Delete(&xray.ClientTraffic{}).Error; err != nil {

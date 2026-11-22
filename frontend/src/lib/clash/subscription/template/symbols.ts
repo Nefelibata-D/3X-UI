@@ -12,17 +12,19 @@ export interface Slot {
   declaration: boolean;
   name: string;
   blacklistTarget?: boolean;
+  stickyGroup?: boolean;
 }
 
 export function templateSymbols(doc: Document) {
   const slots: Slot[] = [];
-  function add(node: unknown, kind: SymbolKind, declaration = false, start = 0, end?: number) {
+  function add(node: unknown, kind: SymbolKind, declaration = false, start = 0, end?: number, stickyGroup = false) {
     if (!isScalar(node) || (typeof node.value !== 'string' && node.value !== null)) return;
     const s = String(node.value ?? '');
     slots.push({
       node,
       kind,
       declaration,
+      stickyGroup,
       start,
       end: end ?? s.length,
       name: s.slice(start, end),
@@ -107,7 +109,8 @@ export function templateSymbols(doc: Document) {
   });
   sequence(doc.get('proxy-groups'), (g) => {
     if (isMap(g)) {
-      add(g.get('name', true), 'proxy', true);
+      const sticky = g.get('type') === 'load-balance' && g.get('strategy') === 'weighted-sticky';
+      add(g.get('name', true), 'proxy', true, 0, undefined, sticky);
       add(g.get('type', true), 'groupType');
       sequence(g.get('proxies'), (p) => add(p, 'proxy'));
       sequence(g.get('use'), (p) => add(p, 'provider'));
@@ -132,6 +135,11 @@ export function templateSymbols(doc: Document) {
   map(doc.get('sub-rules'), (k, v) => {
     add(k, 'subrule', true);
     sequence(v, (r) => rule(r, true));
+  });
+  sequence(doc.get('site-sticky'), (entry) => {
+    if (!isMap(entry)) return;
+    add(entry.get('group', true), 'proxy', false, 0, undefined, true);
+    sequence(entry.get('rules'), (r) => rule(r, false));
   });
   sequence(doc.get('site-blacklist'), (b) => {
     if (isMap(b)) {

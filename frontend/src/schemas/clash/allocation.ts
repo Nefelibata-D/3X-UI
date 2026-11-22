@@ -122,6 +122,7 @@ export const ClientNodeViewSchema = z.object({
 });
 
 export const ClientRatioViewSchema = z.object({
+  managedTotalBytes: z.number().nullable(),
   resetMode: z.enum(['node', 'manual']),
   timezone: z.string(),
   totalBytes: z.number(),

@@ -29,14 +29,15 @@ type ClientNodeView struct {
 }
 
 type ClientRatioView struct {
-	Timezone    string           `json:"timezone"`
-	ResetMode   string           `json:"resetMode"`
-	TotalBytes  int64            `json:"totalBytes"`
-	ClientID    int              `json:"clientId"`
-	Email       string           `json:"email"`
-	Mode        string           `json:"mode"`
-	WeightError string           `json:"weightError,omitempty"`
-	Nodes       []ClientNodeView `json:"nodes"`
+	ManagedTotalBytes *int64           `json:"managedTotalBytes"`
+	Timezone          string           `json:"timezone"`
+	ResetMode         string           `json:"resetMode"`
+	TotalBytes        int64            `json:"totalBytes"`
+	ClientID          int              `json:"clientId"`
+	Email             string           `json:"email"`
+	Mode              string           `json:"mode"`
+	WeightError       string           `json:"weightError,omitempty"`
+	Nodes             []ClientNodeView `json:"nodes"`
 }
 
 func NodeDefaultRatios(cat *catalog.Catalog, nodes map[string]NodeWeight) map[string]float64 {
@@ -115,6 +116,17 @@ func BuildClientRatioView(cat *catalog.Catalog, clientID int, nodes map[string]N
 			effectiveInputs = append(effectiveInputs, WeightInput{Key: key, Weight: w})
 		}
 		view.Nodes = append(view.Nodes, entry)
+	}
+	if ratio != nil && len(view.Nodes) > 0 {
+		var total int64
+		for _, n := range view.Nodes {
+			if n.BudgetBytes == 0 && n.CapacityBytes == 0 {
+				total = 0
+				break
+			}
+			total += n.BudgetBytes
+		}
+		view.ManagedTotalBytes = &total
 	}
 	if defaults, err := NormalizeWeights(defaultInputs); err == nil {
 		applyRatios(view.Nodes, defaults, func(n *ClientNodeView, ratio float64) {

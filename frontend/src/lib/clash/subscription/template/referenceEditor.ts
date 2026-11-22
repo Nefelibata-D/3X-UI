@@ -147,7 +147,11 @@ export function installTemplateReferences(
             ? proxyTypes
             : names.get(s.kind),
       );
-      if (s.kind === 'proxy') builtins.forEach((v) => values.add(v));
+      if (s.stickyGroup && !s.declaration) {
+        values.clear();
+        for (const slot of ranges.keys())
+          if (slot.declaration && slot.stickyGroup) values.add(slot.name);
+      } else if (s.kind === 'proxy') builtins.forEach((v) => values.add(v));
       return {
         suggestions: [...values].map((value) => {
           let insertText = s.blacklistTarget ? blacklistProxyToken(value) : value;

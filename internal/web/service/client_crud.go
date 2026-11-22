@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mhsanaei/3x-ui/v3/internal/clash/allocation"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -24,6 +25,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func hasForbiddenClientChar(s string) bool {
@@ -1044,7 +1046,7 @@ func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic b
 				return err
 			}
 		}
-		return tx.Delete(&model.ClientRecord{}, id).Error
+		return deleteClientRecords(tx, tx.Where("id = ?", id))
 	}); err != nil {
 		withdrawClientTombstones(existing.Email)
 		return needRestart, err
@@ -1322,4 +1324,19 @@ func (s *ClientService) Detach(inboundSvc *InboundService, id int, inboundIds []
 		}})
 	}
 	return fanoutInboundApplies(applies)
+}
+
+// Delete bindings in the same transaction using the identities actually removed.
+func deleteClientRecords(tx, selection *gorm.DB) error {
+	var deleted []model.ClientRecord
+	if err := selection.Clauses(clause.Returning{Columns: []clause.Column{{Name: "sub_id"}}}).Delete(&deleted).Error; err != nil {
+		return err
+	}
+	owners := make([]string, 0, len(deleted))
+	for _, client := range deleted {
+		if client.SubID != "" {
+			owners = append(owners, client.SubID)
+		}
+	}
+	return subscription.RemoveUnusedClientBindings(tx, owners)
 }

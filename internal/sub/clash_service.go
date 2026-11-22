@@ -14,6 +14,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
+	"github.com/mhsanaei/3x-ui/v3/internal/clash/subscription"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
@@ -159,6 +160,23 @@ func (s *SubClashService) getClashWithProject(subId string, host string, legacy 
 	}
 	slices.Sort(emails)
 	traffic, _ := subReq.AggregateTrafficByEmails(emails)
+	managed, plain, err := subscription.NodeQuotaTraffic(emails)
+	if err != nil {
+		return "", "", err
+	}
+	if managed != nil {
+		other, _ := subReq.AggregateTrafficByEmails(plain)
+		traffic.Up = managed.Up + other.Up
+		traffic.Down = managed.Down + other.Down
+		traffic.Total = managed.Total
+		if len(plain) > 0 {
+			if other.Total == 0 || managed.Total == 0 {
+				traffic.Total = 0
+			} else {
+				traffic.Total += other.Total
+			}
+		}
+	}
 	traffic.Enable = hasEnabledClient
 	header := subReq.subscriptionUserinfo(traffic)
 

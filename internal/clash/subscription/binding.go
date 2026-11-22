@@ -200,3 +200,15 @@ func RecordClientSubscriptionSync(subID, userAgent string, token *string) error 
 	}
 	return query.UpdateColumn("last_sync_at", time.Now().UnixMilli()).Error
 }
+
+// RemoveUnusedClientBindings keeps a subscription identity alive until its last client is removed.
+// Older bindings store the owner in sub_id, while additional profiles store it in owner.
+func RemoveUnusedClientBindings(tx *gorm.DB, owners []string) error {
+	if len(owners) == 0 || !tx.Migrator().HasTable(&SubscriptionBinding{}) {
+		return nil
+	}
+	const identity = "COALESCE(NULLIF(clash_subscription_bindings.owner, ''), clash_subscription_bindings.sub_id)"
+	return tx.Where(identity+" IN ?", owners).
+		Where("NOT EXISTS (SELECT 1 FROM clients WHERE clients.sub_id = " + identity + ")").
+		Delete(&SubscriptionBinding{}).Error
+}

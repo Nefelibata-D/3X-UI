@@ -190,44 +190,38 @@ func TestPeriodicTrafficResetClients(t *testing.T) {
 	})
 }
 
-func TestPeriodicTrafficResetInboundRestoresClients(t *testing.T) {
-	t.Run("restores a client the quota switched off", func(t *testing.T) {
-		initResetJobDB(t)
-		seedClientOnCycle(t, 41101, seededClient{
-			email: "depleted-ib@example.com", cycle: "never", day: 1,
-			recordEnable: false, quotaEnable: false, total: 1000, inboundCycle: "daily",
-		})
-
-		NewPeriodicTrafficResetJob("daily", time.UTC).Run()
-
-		row := trafficFor(t, "depleted-ib@example.com")
-		if row.Up != 0 || row.Down != 0 || !row.Enable {
-			t.Fatalf("traffic not reset: up=%d down=%d enable=%v", row.Up, row.Down, row.Enable)
-		}
-		if rec := recordFor(t, "depleted-ib@example.com"); !rec.Enable {
-			t.Fatal("clients.enable still false after the inbound's reset: the client stays out of the core")
-		}
-		if enabled := settingsEnableOf(t, 41101); !enabled {
-			t.Fatal("the inbound settings JSON still has the client disabled")
-		}
-	})
-
-	t.Run("leaves a client the operator switched off", func(t *testing.T) {
-		initResetJobDB(t)
-		seedClientOnCycle(t, 41102, seededClient{
-			email: "banned-ib@example.com", cycle: "never", day: 1,
-			recordEnable: false, quotaEnable: true, total: 100000, inboundCycle: "daily",
-		})
-
-		NewPeriodicTrafficResetJob("daily", time.UTC).Run()
-
-		if rec := recordFor(t, "banned-ib@example.com"); rec.Enable {
-			t.Fatal("an operator-disabled client was switched back on by the inbound's reset")
-		}
-		if enabled := settingsEnableOf(t, 41102); enabled {
-			t.Fatal("an operator-disabled client was enabled in the inbound settings JSON")
-		}
-	})
+func TestPeriodicInboundResetLeavesSharedClientTraffic(t *testing.T) {
+	initResetJobDB(t)
+	const email = "shared@example.com"
+	seedClientOnCycle(t, 41101, seededClient{email: email, cycle: "never", day: 1, recordEnable: true, quotaEnable: true, inboundCycle: "daily"})
+	db := database.GetDB()
+	other := model.Inbound{UserId: 1, Enable: true, Port: 41102, Protocol: model.VLESS, Tag: "other", TrafficReset: "never", Settings: "{}", Up: 100, Down: 200}
+	if err := db.Create(&other).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: recordFor(t, email).Id, InboundId: other.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Inbound{}).Where("port = ?", 41101).Updates(map[string]any{"up": 300, "down": 400}).Error; err != nil {
+		t.Fatal(err)
+	}
+	NewPeriodicTrafficResetJob("daily", time.UTC).Run()
+	var due model.Inbound
+	if err := db.Where("port = ?", 41101).First(&due).Error; err != nil {
+		t.Fatal(err)
+	}
+	if due.Up != 0 || due.Down != 0 || due.LastTrafficResetTime == 0 {
+		t.Fatal("due inbound did not reset")
+	}
+	if err := db.First(&other, other.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if other.Up != 100 || other.Down != 200 || other.LastTrafficResetTime != 0 {
+		t.Fatal("other inbound was reset")
+	}
+	if got := trafficFor(t, email); got.Up != 500 || got.Down != 700 {
+		t.Fatal("shared client was reset by an inbound schedule")
+	}
 }
 
 func settingsEnableOf(t *testing.T, port int) bool {

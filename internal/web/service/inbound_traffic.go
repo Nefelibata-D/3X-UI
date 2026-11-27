@@ -871,7 +871,7 @@ func (s *InboundService) ResetInboundTraffic(id int) error {
 		db := database.GetDB()
 		if err := db.Model(model.Inbound{}).
 			Where("id = ?", id).
-			Updates(map[string]any{"up": 0, "down": 0}).Error; err != nil {
+			Updates(map[string]any{"up": 0, "down": 0, "last_traffic_reset_time": time.Now().UnixMilli()}).Error; err != nil {
 			return err
 		}
 		var err error

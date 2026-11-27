@@ -113,15 +113,8 @@ func (j *PeriodicTrafficResetJob) resetInboundsOnSchedule() {
 			}
 		}
 
-		nr, resetClientErr := j.clientService.ResetAllClientTraffics(&j.inboundService, inbound.Id)
-		if resetClientErr != nil {
-			logger.Warning("Failed to reset traffic for all users of inbound", inbound.Id, ":", resetClientErr)
-		}
-		if nr {
-			needRestart.Store(true)
-		}
-
-		if resetInboundErr == nil && resetClientErr == nil {
+		// Client counters are shared across inbounds and have their own schedule.
+		if resetInboundErr == nil {
 			resetCount.Add(1)
 		}
 	})
@@ -135,8 +128,7 @@ func (j *PeriodicTrafficResetJob) resetInboundsOnSchedule() {
 	}
 }
 
-// resetClientsOnTheirOwnCycle resets clients whose cycle is set individually. A
-// client inside an inbound on the same cycle is reset twice, which is harmless.
+// resetClientsOnTheirOwnCycle resets clients whose cycle is set individually.
 func (j *PeriodicTrafficResetJob) resetClientsOnTheirOwnCycle() {
 	cycles, err := j.clientService.GetClientsByTrafficReset(string(j.period))
 	if err != nil {
